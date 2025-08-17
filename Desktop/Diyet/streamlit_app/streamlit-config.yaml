@@ -1,0 +1,13 @@
+name: diyet-foto-gunlugu
+description: Diyet Foto Günlüğü Uygulaması - Yemek kayıtları ve PDF raporu
+
+resources:
+  cpu: 1
+  memory: 1G
+
+build:
+  packages:
+    - libgl1-mesa-glx
+
+settings:
+  pythonVersion: 3.10
