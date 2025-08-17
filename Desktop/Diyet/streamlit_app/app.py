@@ -18,6 +18,12 @@ st.set_page_config(
 
 # API URL'leri - bunları çevre değişkenlerinden alabilirsiniz
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:3000")
+
+# Dev-Demo amaçlı backend baypası (Streamlit Cloud için)
+if os.environ.get("STREAMLIT_DEMO_MODE") == "true":
+    API_BASE_URL = "https://diyet-app-backend.onrender.com"
+    
+# API URL'leri
 AUTH_URL = f"{API_BASE_URL}/api/auth/login"
 MEALS_URL = f"{API_BASE_URL}/api/meals"
 REPORT_URL = f"{API_BASE_URL}/api/report/pdf"
@@ -100,40 +106,53 @@ def login():
     st.title("Diyet Foto Günlüğü")
     st.subheader("Giriş")
     
+    # API bağlantı kontrolü
+    try:
+        requests.get(f"{API_BASE_URL}/api/health", timeout=3)
+        api_status = True
+    except Exception:
+        st.error(f"⚠️ API bağlantısı kurulamadı: {API_BASE_URL}")
+        st.info("Not: Yerel test için backend'in çalışır durumda olduğundan emin olun.")
+        st.code("node src/server.js", language="bash")
+        api_status = False
+    
     col1, col2 = st.columns(2)
     with col1:
         user_code = st.selectbox("Kullanıcı", ["A (Ben)", "B (Eşim)"])
         user_code = user_code[0]  # Sadece ilk karakteri al (A veya B)
     
     with col2:
-        pin = st.text_input("PIN Kodu", type="password")
+        pin = st.text_input("PIN Kodu", type="password", value="1234")
     
-    if st.button("Giriş Yap", type="primary"):
+    login_button = st.button("Giriş Yap", type="primary", disabled=not api_status)
+    
+    if login_button:
         if not pin:
             st.error("Lütfen PIN kodunu girin")
             return False
         
-        try:
-            response = requests.post(
-                AUTH_URL,
-                json={"code": user_code, "pin": pin},
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                st.session_state.token = data["token"]
-                st.session_state.user = data["user"]
-                st.session_state.logged_in = True
-                st.success("Giriş başarılı!")
-                st.experimental_rerun()
-                return True
-            else:
-                st.error(f"Giriş başarısız: {response.json().get('error', 'Bilinmeyen hata')}")
+        with st.spinner("Giriş yapılıyor..."):
+            try:
+                response = requests.post(
+                    AUTH_URL,
+                    json={"code": user_code, "pin": pin},
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    st.session_state.token = data["token"]
+                    st.session_state.user = data["user"]
+                    st.session_state.logged_in = True
+                    st.success("Giriş başarılı!")
+                    st.experimental_rerun()
+                    return True
+                else:
+                    st.error(f"Giriş başarısız: {response.json().get('error', 'Bilinmeyen hata')}")
+                    return False
+            except requests.exceptions.RequestException as e:
+                st.error(f"Bağlantı hatası: API'ye ulaşılamıyor ({str(e)})")
                 return False
-        except Exception as e:
-            st.error(f"Bağlantı hatası: {str(e)}")
-            return False
     
     st.markdown('</div>', unsafe_allow_html=True)
     return False
@@ -261,18 +280,20 @@ def main():
         
         # Filtreleri uygula ve verileri getir
         if st.button("Filtrele", type="primary"):
-            meals = get_meals(
-                start_date.isoformat(),
-                end_date.isoformat(),
-                user_id
-            )
-            
-            if meals:
-                # PDF raporu indir
-                download_pdf_report(
+            with st.spinner("Yemekler getiriliyor..."):
+                meals = get_meals(
                     start_date.isoformat(),
                     end_date.isoformat(),
                     user_id
+                )
+                
+                if meals:
+                    # PDF raporu indir
+                    with st.spinner("PDF raporu hazırlanıyor..."):
+                        download_pdf_report(
+                            start_date.isoformat(),
+                            end_date.isoformat(),
+                            user_id
                 )
                 
                 # Öğünleri görüntüle
@@ -283,6 +304,26 @@ def main():
     with tabs[1]:
         st.subheader("Ayarlar")
         
+        # API URL bilgisi
+        st.info(f"API URL: {API_BASE_URL}")
+        
+        # Demo modu göster/gizle
+        if 'demo_mode' not in st.session_state:
+            st.session_state.demo_mode = os.environ.get("STREAMLIT_DEMO_MODE") == "true"
+            
+        st.checkbox(
+            "Demo Modu (Backend API gerekmez)", 
+            value=st.session_state.demo_mode,
+            key="demo_mode_checkbox",
+            help="Demo modunda backend API'ye ihtiyaç yoktur, örnek veriler kullanılır."
+        )
+        
+        if st.session_state.demo_mode_checkbox != st.session_state.demo_mode:
+            st.session_state.demo_mode = st.session_state.demo_mode_checkbox
+            os.environ["STREAMLIT_DEMO_MODE"] = "true" if st.session_state.demo_mode else "false"
+            st.experimental_rerun()
+        
+        # Çıkış yap
         if st.button("Çıkış Yap"):
             st.session_state.logged_in = False
             st.session_state.token = None
