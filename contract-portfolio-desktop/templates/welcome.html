@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sözleşme Portföy Paneli</title>
+<link href="__FONTS_CSS__" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10151C; --panel:#182029; --panel2:#1D2732; --line:#26303C;
+    --txt:#DEE6EE; --muted:#8A98A8; --faint:#5A6876; --accent:#4FA3D9;
+    --crit:#E05A47;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;
+       display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+        padding:44px 46px;max-width:560px;width:100%;text-align:center;
+        box-shadow:0 12px 48px rgba(0,0,0,.4)}
+  .logo{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#2E6E97);
+        margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:28px}
+  h1{font-size:22px;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:13.5px;margin-top:8px;line-height:1.5}
+  .btn{background:var(--accent);border:none;color:#0C1319;border-radius:9px;
+       padding:13px 26px;font-size:15px;font-weight:600;cursor:pointer;margin-top:26px;
+       font-family:var(--sans)}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:active{transform:translateY(1px)}
+  .btn.secondary{background:none;border:1px solid var(--line);color:var(--txt);
+       padding:11px 20px;font-size:13.5px;font-weight:500;margin-top:12px}
+  .btn.secondary:hover{border-color:var(--muted)}
+  .last{margin-top:24px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  .last .path{font-family:var(--mono);color:var(--txt);font-size:12px;word-break:break-all;margin-top:6px;
+       background:var(--panel2);padding:8px 10px;border-radius:6px;border:1px solid var(--line)}
+  .hint{margin-top:28px;font-size:11.5px;color:var(--faint);line-height:1.6}
+  .hint code{font-family:var(--mono);color:var(--muted)}
+  .err{background:rgba(224,90,71,.12);border:1px solid rgba(224,90,71,.4);color:#F0A99B;
+       border-radius:9px;padding:12px 14px;margin-top:20px;font-size:12.5px;text-align:left;white-space:pre-wrap;display:none}
+  .err.show{display:block}
+  .busy{margin-top:20px;font-size:13px;color:var(--accent);display:none}
+  .busy.show{display:block}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">📊</div>
+    <h1>Sözleşme Portföy Paneli</h1>
+    <div class="sub">Excel dosyanızı yükleyin; portföyünüz yenileme riski ve marj
+      sağlığı açısından interaktif bir panoda görünsün.</div>
+
+    <div id="controls">
+      <button class="btn" id="btnLoad">📂 Excel Yükle (.xlsx)</button>
+      __LAST_FILE_BLOCK__
+    </div>
+
+    <div class="busy" id="busy">Dosya işleniyor…</div>
+    <div class="err" id="err"></div>
+
+    <div class="hint">
+      Beklenen kolonlar: <code>Contract Number, Müşteri, Sözleşmenin Yıllık Bedeli,
+      (YTD) SM%, (Fiscal Year) SM%, … , Notlar</code><br>
+      İnternet bağlantısı gerekmez. TL sözleşmeler panodaki EUR/TRY kuruyla çevrilir.
+    </div>
+  </div>
+
+  <div id="modalBack" style="display:none;position:fixed;inset:0;background:rgba(6,10,14,.72);
+       align-items:center;justify-content:center;padding:24px;z-index:100">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;
+         padding:26px 28px;max-width:520px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,.5)">
+      <h1 style="font-size:17px">Kolon eşleşmesini onaylayın</h1>
+      <div class="sub" style="margin-top:8px">Bazı kolon adları şemayla birebir aynı değil.
+        Aşağıdaki en yakın eşleşmeleri kullanalım mı?</div>
+      <div id="modalList" style="margin-top:16px;text-align:left;font-size:13px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px">
+        <button class="btn secondary" id="modalCancel" style="margin-top:0">İptal</button>
+        <button class="btn" id="modalOk" style="margin-top:0">Onayla ve yükle</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+__WELCOME_SCRIPT__
+</script>
+</body>
+</html>

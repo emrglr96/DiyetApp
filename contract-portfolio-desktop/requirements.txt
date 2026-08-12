@@ -1,0 +1,7 @@
+# Çalışma zamanı bağımlılıkları
+pywebview>=5.0      # masaüstü penceresi (Windows'ta WebView2 kullanır)
+openpyxl>=3.1       # .xlsx okuma
+Flask>=3.0          # pywebview başlatılamazsa tarayıcı geri-dönüşü
+
+# Paketleme (yalnızca .exe üretmek için gerekli; uygulama için şart değil)
+# pip install pyinstaller

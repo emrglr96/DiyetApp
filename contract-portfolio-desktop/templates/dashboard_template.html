@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sözleşme Portföy Paneli — PowerBI Prototip</title>
+<link href="__FONTS_CSS__" rel="stylesheet">
+<script src="__CHART_JS__"></script>
+<style>
+  :root{
+    --bg:#10151C; --panel:#182029; --panel2:#1D2732; --line:#26303C;
+    --txt:#DEE6EE; --muted:#8A98A8; --faint:#5A6876;
+    --ok:#3FB68B; --warn:#E0A83C; --crit:#E05A47; --exp:#5A6876; --err:#B06AD4;
+    --accent:#4FA3D9;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.45;padding:20px 22px 60px}
+  h1{font-size:19px;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:14px}
+  .fx{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .fx input{width:72px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 8px;font-family:var(--mono);font-size:13px}
+  .fx input:focus{outline:2px solid var(--accent);outline-offset:1px}
+
+  /* Filters */
+  .filters{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .fgroup{display:flex;flex-direction:column;gap:6px}
+  .fgroup label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600}
+  .chips{display:flex;gap:6px}
+  .chip{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 11px;font-size:12.5px;cursor:pointer;font-family:var(--mono)}
+  .chip:hover{border-color:var(--accent)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#0C1319;font-weight:600}
+  .fgroup input[type=number], .fgroup select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 9px;font-size:13px;font-family:var(--mono)}
+  .fgroup input:focus,.fgroup select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .toggle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--txt);cursor:pointer;user-select:none}
+  .toggle input{accent-color:var(--accent);width:15px;height:15px}
+  .reset{margin-left:auto;background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer}
+  .reset:hover{color:var(--txt);border-color:var(--muted)}
+  .loadbtn{background:var(--accent);border:1px solid var(--accent);color:#0C1319;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--sans)}
+  .loadbtn:hover{filter:brightness(1.08)}
+  .loadbtn:active{transform:translateY(1px)}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .kpi .v{font-family:var(--mono);font-size:22px;font-weight:600;margin-top:3px}
+  .kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600}
+  .kpi .h{font-size:11.5px;color:var(--faint);margin-top:3px}
+  .kpi.crit .v{color:var(--crit)}
+  .kpi.warn .v{color:var(--warn)}
+
+  /* Panels */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+  .panel h2{font-size:14px;font-weight:600;margin-bottom:2px}
+  .panel .desc{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:980px){.grid2{grid-template-columns:1fr}}
+  .chartbox{position:relative;height:300px}
+
+  /* Renewal horizon (signature) */
+  .horizon{position:relative;height:118px;margin-top:8px}
+  .h-axis{position:absolute;left:0;right:0;top:78px;border-top:1px solid var(--line)}
+  .h-month{position:absolute;top:82px;font-size:10.5px;color:var(--faint);font-family:var(--mono);transform:translateX(-50%);white-space:nowrap}
+  .h-tick{position:absolute;top:74px;height:8px;border-left:1px solid var(--line)}
+  .h-dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%);cursor:pointer;opacity:.92;border:1px solid rgba(255,255,255,.25)}
+  .h-dot:hover{opacity:1;border-color:#fff;z-index:5}
+  .h-now{position:absolute;top:0;bottom:26px;border-left:2px solid var(--accent)}
+  .h-now span{position:absolute;top:-2px;left:6px;font-size:10.5px;color:var(--accent);font-family:var(--mono)}
+  .tooltip{position:fixed;background:#0C1218;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:12px;pointer-events:none;z-index:50;display:none;max-width:260px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+  .tooltip b{font-family:var(--mono)}
+
+  /* Table */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
+  th:hover{color:var(--txt)}
+  th.num,td.num{text-align:right;font-family:var(--mono)}
+  td{padding:7px 10px;border-bottom:1px solid rgba(38,48,60,.55)}
+  tr:hover td{background:rgba(79,163,217,.06)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .b-ok{background:rgba(63,182,139,.16);color:var(--ok)}
+  .b-warn{background:rgba(224,168,60,.16);color:var(--warn)}
+  .b-crit{background:rgba(224,90,71,.18);color:var(--crit)}
+  .b-exp{background:rgba(90,104,118,.22);color:#9AA7B4}
+  .b-err{background:rgba(176,106,212,.16);color:var(--err)}
+  .tl-tag{font-size:10px;color:var(--warn);font-family:var(--mono);margin-left:4px}
+  .tscroll{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .tscroll th{position:sticky;top:0;background:var(--panel);z-index:2}
+  .count-note{font-size:12px;color:var(--muted);margin-top:8px}
+
+  /* PowerBI spec */
+  .spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+  .spec-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:13px 15px}
+  .spec-card h3{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px}
+  .spec-card p{font-size:12.5px;color:var(--muted)}
+  .spec-card code{font-family:var(--mono);font-size:11.5px;color:var(--txt);background:rgba(79,163,217,.1);padding:1px 5px;border-radius:4px}
+  .dq{display:flex;flex-direction:column;gap:8px}
+  .dq-item{display:flex;gap:10px;align-items:baseline;font-size:12.5px}
+  .dq-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;position:relative;top:0}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+</style>
+</head>
+<body>
+
+<div id="parseDqBanner" style="display:none;background:rgba(224,168,60,.12);border:1px solid rgba(224,168,60,.4);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;color:#F0D399">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <div><b id="parseDqTitle"></b><ul id="parseDqList" style="margin:6px 0 0 18px;padding:0"></ul></div>
+    <button onclick="document.getElementById('parseDqBanner').style.display='none'" style="background:none;border:1px solid rgba(224,168,60,.5);color:#F0D399;border-radius:6px;padding:3px 9px;cursor:pointer;font-size:12px;flex-shrink:0">Kapat</button>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>Sözleşme Portföy Paneli</h1>
+    <div class="sub">__SUBTITLE__</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div class="fx">
+      <span>EUR/TRY kuru</span>
+      <input type="number" id="fxRate" value="48" step="0.5" min="1">
+      <span id="fxNote" style="font-size:11px"></span>
+    </div>
+    <button id="btnNewFile" class="loadbtn" title="Farklı bir Excel dosyası yükle">↥ Yeni dosya yükle</button>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="fgroup">
+    <label>Min. yıllık bedel (€)</label>
+    <div class="chips">
+      <button class="chip" data-min="0">Tümü</button>
+      <button class="chip" data-min="25000">≥25k</button>
+      <button class="chip" data-min="50000">≥50k</button>
+      <button class="chip" data-min="100000">≥100k</button>
+      <input type="number" id="minVal" value="0" step="5000" min="0" style="width:90px" title="Serbest değer">
+    </div>
+  </div>
+  <div class="fgroup">
+    <label>Son dönem SM% en fazla</label>
+    <div class="chips">
+      <button class="chip" data-sm="999">Tümü</button>
+      <button class="chip" data-sm="60">&lt;%60</button>
+      <button class="chip" data-sm="25">&lt;%25</button>
+      <button class="chip" data-sm="0">&lt;%0</button>
+    </div>
+  </div>
+  <div class="fgroup">
+    <label>Yenileme penceresi</label>
+    <select id="winSel">
+      <option value="all">Tümü</option>
+      <option value="3">0–3 ay içinde bitecek</option>
+      <option value="6">0–6 ay içinde bitecek</option>
+      <option value="12">0–12 ay içinde bitecek</option>
+    </select>
+  </div>
+  <div class="fgroup">
+    <label>Durum</label>
+    <div style="display:flex;gap:14px">
+      <label class="toggle"><input type="checkbox" id="cbExpired"> Süresi dolmuşları dahil et</label>
+      <label class="toggle"><input type="checkbox" id="cbErr"> Veri hatalarını dahil et</label>
+    </div>
+  </div>
+  <button class="reset" id="btnReset">Filtreleri sıfırla</button>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">Sözleşme</div><div class="v" id="kCount">–</div><div class="h" id="kCountH"></div></div>
+  <div class="kpi"><div class="l">Yıllık ciro</div><div class="v" id="kRev">–</div><div class="h">filtreli toplam</div></div>
+  <div class="kpi"><div class="l">Ağırlıklı SM%</div><div class="v" id="kSM">–</div><div class="h">ciro ağırlıklı, son dönem</div></div>
+  <div class="kpi warn"><div class="l">6 ayda bitecek ciro</div><div class="v" id="kExp6">–</div><div class="h" id="kExp6H"></div></div>
+  <div class="kpi crit"><div class="l">Kritik marj (&lt;%25)</div><div class="v" id="kCrit">–</div><div class="h" id="kCritH"></div></div>
+</div>
+
+<div class="panel">
+  <h2>Yenileme Ufku — önümüzdeki 24 ay</h2>
+  <div class="desc">Her nokta bir sözleşme: konum = bitiş tarihi, boyut = yıllık bedel, renk = marj sağlığı. Üzerine gelerek detayı görün.</div>
+  <div class="horizon" id="horizon"></div>
+  <div class="legend">
+    <span><i style="background:var(--ok)"></i> Sağlıklı (SM% &gt; 60)</span>
+    <span><i style="background:var(--warn)"></i> İzleme (25–60)</span>
+    <span><i style="background:var(--crit)"></i> Kritik (&lt; 25)</span>
+    <span><i style="background:var(--accent);border-radius:0;width:2px;height:12px"></i> Bugün</span>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Pareto — ciro konsantrasyonu</h2>
+    <div class="desc">Müşteriler yıllık bedele göre sıralı; çizgi kümülatif payı gösterir.</div>
+    <div class="chartbox"><canvas id="chPareto"></canvas></div>
+    <div class="count-note" id="paretoNote"></div>
+  </div>
+  <div class="panel">
+    <h2>Bedel × Marj — risk haritası</h2>
+    <div class="desc">X: yıllık bedel (log) · Y: son dönem SM% · boyut: toplam sözleşme bedeli. Sağ alt köşe = büyük ve zararlı.</div>
+    <div class="chartbox"><canvas id="chScatter"></canvas></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Yenileme pipeline — riske giren ciro</h2>
+    <div class="desc">Aktif sözleşmelerin bitiş tarihine göre dilimlenmiş yıllık ciro toplamı.</div>
+    <div class="chartbox" style="height:260px"><canvas id="chPipe"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>Marj dağılımı</h2>
+    <div class="desc">Son dönem SM% bantlarına göre sözleşme sayısı ve ciro.</div>
+    <div class="chartbox" style="height:260px"><canvas id="chDist"></canvas></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Sözleşme listesi</h2>
+  <div class="desc">Başlıklara tıklayarak sıralayın. YTD ile son dönem SM% arasındaki fark trend sinyalidir.</div>
+  <div class="tscroll">
+  <table id="tbl">
+    <thead><tr>
+      <th data-k="musteri">Müşteri</th>
+      <th data-k="contract">Sözleşme No</th>
+      <th data-k="yillikEur" class="num">Yıllık (€)</th>
+      <th data-k="son" class="num">Son Dönem SM%</th>
+      <th data-k="ytd" class="num">YTD SM%</th>
+      <th data-k="trend" class="num">Δ Trend</th>
+      <th data-k="daysToEnd" class="num">Bitişe (gün)</th>
+      <th data-k="end">Bitiş</th>
+      <th data-k="health">Sağlık</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  </div>
+  <div class="count-note" id="tblNote"></div>
+</div>
+
+<div class="panel">
+  <h2>Veri kalitesi bulguları</h2>
+  <div class="desc">PowerBI'da ayrı bir "Data Quality" sayfası olarak kurgulanmalı — bu bulgular otomatik yakalanmalı.</div>
+  <div class="dq" id="dqList"></div>
+</div>
+
+<div class="panel">
+  <h2>PowerBI kurulum rehberi — ekip için</h2>
+  <div class="desc">Bu prototipteki her bileşenin PowerBI karşılığı. Model: tek fact tablosu (sözleşmeler) + tarih boyut tablosu.</div>
+  <div class="spec">
+    <div class="spec-card"><h3>1 · Slicer'lar</h3><p>Yukarıdaki filtre barı = PowerBI slicer paneli. <code>Min Yıllık Bedel</code> (numeric range slicer), <code>SM% Bandı</code>, <code>Yenileme Penceresi</code> (hesaplanmış kolon: 0-3 / 3-6 / 6-12 ay / Sonrası), <code>Durum</code> (Aktif / Süresi Dolmuş / Veri Hatası).</p></div>
+    <div class="spec-card"><h3>2 · Temel measure'lar</h3><p><code>Toplam Yıllık Ciro = SUM(Yıllık Bedel EUR)</code> · <code>Ağırlıklı SM% = SUMX(bedel × SM%) / SUM(bedel)</code> — basit AVERAGE değil, ciro ağırlıklı olmalı. · <code>Riske Giren Ciro 6A</code> = bitişi 183 gün içindeki aktiflerin toplamı.</p></div>
+    <div class="spec-card"><h3>3 · Hesaplanmış kolonlar</h3><p><code>Bitişe Kalan Gün = DATEDIFF(TODAY, Bitiş)</code> · <code>Sağlık = kritik &lt;25 / izleme 25-60 / sağlıklı &gt;60</code> · <code>Trend Δ = YTD SM% − Son Dönem SM%</code> · <code>Yıllık Bedel EUR</code>: TL sözleşmeler için kur parametresi ile çevrim (What-if parameter).</p></div>
+    <div class="spec-card"><h3>4 · Kur çevrimi</h3><p>EUR/TRY için <code>What-if Parameter</code> kullanın — sabit değer gömmeyin. İdealde TCMB kurunu Power Query ile çekip aylık ortalama uygulayın; hangi satırın TL olduğu ayrı bir <code>Para Birimi</code> kolonunda tutulmalı.</p></div>
+    <div class="spec-card"><h3>5 · Görseller</h3><p>Yenileme Ufku → dispersion/dot plot (custom visual) veya Gantt. Pareto → combo chart (bar + kümülatif line measure). Risk haritası → scatter, X ekseni log ölçek. Pipeline → clustered bar, hesaplanmış pencere kolonuyla.</p></div>
+    <div class="spec-card"><h3>6 · Data Quality sayfası</h3><p>Otomatik kurallar: <code>Bitiş &lt; Başlangıç</code>, süresi dolup listede kalanlar, aynı sözleşme numarasına bağlı çoklu satırlar (ör. 7083000317, 7083000499), SM% boş/metin değerler (<code>x/o</code>). Her kural bir kart + detay tablosu.</p></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+const RAW = __RAW_DATA__;
+const TODAY = new Date(__TODAY_ARGS__);
+
+// ---------- state ----------
+const state = { min: 0, smMax: 999, win: 'all', expired: false, err: false };
+
+// ---------- helpers ----------
+const fmtEur = v => '€ ' + Math.round(v).toLocaleString('tr-TR');
+const fmtEurK = v => v >= 1e6 ? '€ ' + (v/1e6).toFixed(2) + 'M' : '€ ' + Math.round(v/1000) + 'k';
+const fmtDate = iso => { if(!iso) return '–'; const [y,m,d] = iso.split('-'); return `${d}.${m}.${y}`; };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function fxRate(){ return parseFloat(document.getElementById('fxRate').value) || 48; }
+
+function enrich(){
+  const fx = fxRate();
+  return RAW.map(r => {
+    const yillikEur = r.tl ? r.yillik / fx : r.yillik;
+    const toplamEur = r.tl ? r.toplam / fx : r.toplam;
+    let health, hcolor;
+    if (r.dataError) { health = 'Veri hatası'; hcolor = css('--err'); }
+    else if (r.expired) { health = 'Süresi dolmuş'; hcolor = css('--exp'); }
+    else if (r.son === null) { health = 'Veri yok'; hcolor = css('--exp'); }
+    else if (r.son < 25) { health = 'Kritik'; hcolor = css('--crit'); }
+    else if (r.son < 60) { health = 'İzleme'; hcolor = css('--warn'); }
+    else { health = 'Sağlıklı'; hcolor = css('--ok'); }
+    const trend = (r.ytd !== null && r.son !== null) ? r.ytd - r.son : null;
+    return {...r, yillikEur, toplamEur, health, hcolor, trend};
+  });
+}
+
+function filtered(){
+  return enrich().filter(r => {
+    if (r.yillikEur < state.min) return false;
+    if (state.smMax !== 999 && !(r.son !== null && r.son < state.smMax)) return false;
+    if (!state.expired && r.expired) return false;
+    if (!state.err && r.dataError) return false;
+    if (state.win !== 'all') {
+      const lim = {'3':92,'6':183,'12':365}[state.win];
+      if (r.dataError || r.daysToEnd === null || r.daysToEnd < 0 || r.daysToEnd > lim) return false;
+    }
+    return true;
+  });
+}
+
+// ---------- KPIs ----------
+function renderKPIs(rows){
+  const all = enrich();
+  document.getElementById('kCount').textContent = rows.length;
+  document.getElementById('kCountH').textContent = `toplam ${all.length} kayıttan`;
+  const rev = rows.reduce((s,r)=>s+r.yillikEur,0);
+  document.getElementById('kRev').textContent = fmtEurK(rev);
+  const wRows = rows.filter(r=>r.son!==null);
+  const wSum = wRows.reduce((s,r)=>s+r.yillikEur,0);
+  const wSM = wSum ? wRows.reduce((s,r)=>s+r.yillikEur*r.son,0)/wSum : 0;
+  document.getElementById('kSM').textContent = '%' + wSM.toFixed(1);
+  const exp6 = rows.filter(r=>!r.expired && !r.dataError && r.daysToEnd!==null && r.daysToEnd>=0 && r.daysToEnd<=183);
+  document.getElementById('kExp6').textContent = fmtEurK(exp6.reduce((s,r)=>s+r.yillikEur,0));
+  document.getElementById('kExp6H').textContent = exp6.length + ' sözleşme';
+  const crit = rows.filter(r=>!r.expired && !r.dataError && r.son!==null && r.son<25);
+  document.getElementById('kCrit').textContent = crit.length;
+  document.getElementById('kCritH').textContent = fmtEurK(crit.reduce((s,r)=>s+r.yillikEur,0)) + ' ciro';
+}
+
+// ---------- Renewal horizon ----------
+const tip = document.getElementById('tip');
+function showTip(e, html){ tip.innerHTML = html; tip.style.display='block'; moveTip(e); }
+function moveTip(e){ tip.style.left = Math.min(e.clientX+14, window.innerWidth-280)+'px'; tip.style.top = (e.clientY+14)+'px'; }
+function hideTip(){ tip.style.display='none'; }
+
+function renderHorizon(rows){
+  const box = document.getElementById('horizon');
+  box.innerHTML = '';
+  const W = box.clientWidth;
+  const start = new Date(2026, 7, 1); // Ağu 2026
+  const months = 24;
+  const msSpan = new Date(2028, 7, 1) - start;
+  const x = d => ((d - start) / msSpan) * W;
+  // axis
+  const ax = document.createElement('div'); ax.className='h-axis'; box.appendChild(ax);
+  const mNames = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+  for(let i=0;i<=months;i+=2){
+    const d = new Date(2026, 7+i, 1);
+    const px = x(d); if (px<0||px>W) continue;
+    const t = document.createElement('div'); t.className='h-tick'; t.style.left=px+'px'; box.appendChild(t);
+    const lbl = document.createElement('div'); lbl.className='h-month'; lbl.style.left=px+'px';
+    lbl.textContent = mNames[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2); box.appendChild(lbl);
+  }
+  // now line
+  const now = document.createElement('div'); now.className='h-now'; now.style.left=x(TODAY)+'px';
+  now.innerHTML='<span>bugün</span>'; box.appendChild(now);
+  // dots — active contracts ending within window; jitter rows vertically to reduce overlap
+  const active = rows.filter(r=>!r.expired && !r.dataError && r.end);
+  const maxV = Math.max(...active.map(r=>r.yillikEur), 1);
+  active.forEach((r,i) => {
+    const d = new Date(r.end);
+    const px = x(d); if (px < -10 || px > W+10) return;
+    const size = 8 + 26 * Math.sqrt(r.yillikEur/maxV);
+    const dot = document.createElement('div'); dot.className='h-dot';
+    dot.style.left=px+'px';
+    dot.style.top=(14 + (i % 5) * 13)+'px';
+    dot.style.width=size+'px'; dot.style.height=size+'px';
+    dot.style.background=r.hcolor;
+    dot.addEventListener('mousemove', e=>{ moveTip(e); });
+    dot.addEventListener('mouseenter', e=>showTip(e,
+      `<b>${r.musteri}</b> · ${r.contract}${r.tl?' <span style="color:var(--warn)">TL→EUR</span>':''}<br>
+       Yıllık: <b>${fmtEur(r.yillikEur)}</b><br>
+       Son dönem SM%: <b>${r.son===null?'–':'%'+r.son.toFixed(1)}</b><br>
+       Bitiş: ${fmtDate(r.end)} (${r.daysToEnd} gün)`));
+    dot.addEventListener('mouseleave', hideTip);
+    box.appendChild(dot);
+  });
+}
+
+// ---------- Charts ----------
+let chPareto, chScatter, chPipe, chDist;
+Chart.defaults.color = css('--muted');
+Chart.defaults.borderColor = css('--line');
+Chart.defaults.font.family = css('--sans') || 'IBM Plex Sans';
+
+function renderPareto(rows){
+  const sorted = [...rows].sort((a,b)=>b.yillikEur-a.yillikEur);
+  const top = sorted.slice(0,25);
+  const total = sorted.reduce((s,r)=>s+r.yillikEur,0);
+  let cum = 0;
+  const cumPct = top.map(r=>{ cum += r.yillikEur; return +(cum/total*100).toFixed(1); });
+  // note: pareto share of top 20%
+  const n20 = Math.max(1, Math.ceil(sorted.length*0.2));
+  const share20 = total ? sorted.slice(0,n20).reduce((s,r)=>s+r.yillikEur,0)/total*100 : 0;
+  document.getElementById('paretoNote').textContent =
+    `Filtreli sette müşterilerin %20'si (${n20} sözleşme) cironun %${share20.toFixed(0)}'ini taşıyor. İlk 25 gösteriliyor.`;
+  const cfg = {
+    data:{ labels: top.map(r=>r.musteri),
+      datasets:[
+        {type:'bar', label:'Yıllık bedel', data: top.map(r=>Math.round(r.yillikEur)), backgroundColor: top.map(r=>r.hcolor), yAxisID:'y', borderRadius:3},
+        {type:'line', label:'Kümülatif %', data: cumPct, yAxisID:'y2', borderColor: css('--accent'), pointRadius:2, tension:.3}
+      ]},
+    options:{ maintainAspectRatio:false,
+      scales:{ y:{ticks:{callback:v=>fmtEurK(v)}}, y2:{position:'right', min:0, max:100, grid:{display:false}, ticks:{callback:v=>v+'%'}}, x:{ticks:{font:{size:10}}} },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=> c.dataset.type==='bar' ? fmtEur(c.raw) : 'Kümülatif %'+c.raw }} } }
+  };
+  if (chPareto) { chPareto.data = cfg.data; chPareto.options = cfg.options; chPareto.update(); }
+  else chPareto = new Chart(document.getElementById('chPareto'), cfg);
+}
+
+function renderScatter(rows){
+  const pts = rows.filter(r=>r.son!==null);
+  const maxT = Math.max(...pts.map(r=>r.toplamEur||r.yillikEur), 1);
+  const cfg = {
+    type:'bubble',
+    data:{ datasets:[{ data: pts.map(r=>({x:r.yillikEur, y:r.son, r: 4+14*Math.sqrt((r.toplamEur||r.yillikEur)/maxT), _r:r})),
+      backgroundColor: pts.map(r=>r.hcolor+'CC'), borderColor: pts.map(r=>r.hcolor) }]},
+    options:{ maintainAspectRatio:false,
+      scales:{ x:{type:'logarithmic', title:{display:true,text:'Yıllık bedel (€, log)'}, ticks:{callback:v=>[5000,10000,25000,50000,100000,250000,600000].includes(v)?fmtEurK(v):null}},
+               y:{title:{display:true,text:'Son dönem SM%'}, ticks:{callback:v=>'%'+v}} },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>{const r=c.raw._r; return `${r.musteri}: ${fmtEur(r.yillikEur)} · SM %${r.son.toFixed(1)}`;}}} } }
+  };
+  if (chScatter){ chScatter.data=cfg.data; chScatter.options=cfg.options; chScatter.update(); }
+  else chScatter = new Chart(document.getElementById('chScatter'), cfg);
+}
+
+function renderPipe(rows){
+  const act = rows.filter(r=>!r.expired && !r.dataError && r.daysToEnd!==null && r.daysToEnd>=0);
+  const b = {'0–3 ay':[0,92],'3–6 ay':[93,183],'6–12 ay':[184,365],'12+ ay':[366,1e9]};
+  const labels = Object.keys(b);
+  const vals = labels.map(k=>act.filter(r=>r.daysToEnd>=b[k][0]&&r.daysToEnd<=b[k][1]).reduce((s,r)=>s+r.yillikEur,0));
+  const cnts = labels.map(k=>act.filter(r=>r.daysToEnd>=b[k][0]&&r.daysToEnd<=b[k][1]).length);
+  const cols = [css('--crit'), css('--warn'), css('--accent'), css('--ok')];
+  const cfg = { type:'bar',
+    data:{ labels, datasets:[{data:vals.map(Math.round), backgroundColor:cols, borderRadius:4}]},
+    options:{ maintainAspectRatio:false, plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>`${fmtEur(c.raw)} · ${cnts[c.dataIndex]} sözleşme`}}},
+      scales:{y:{ticks:{callback:v=>fmtEurK(v)}}} } };
+  if (chPipe){ chPipe.data=cfg.data; chPipe.update(); }
+  else chPipe = new Chart(document.getElementById('chPipe'), cfg);
+}
+
+function renderDist(rows){
+  const bands = [['< %0',-1e9,0],['%0–25',0,25],['%25–60',25,60],['%60–85',60,85],['> %85',85,1e9]];
+  const withSM = rows.filter(r=>r.son!==null);
+  const cnt = bands.map(b=>withSM.filter(r=>r.son>=b[1]&&r.son<b[2]).length);
+  const rev = bands.map(b=>withSM.filter(r=>r.son>=b[1]&&r.son<b[2]).reduce((s,r)=>s+r.yillikEur,0));
+  const cols = [css('--crit'), css('--crit')+'99', css('--warn'), css('--ok')+'99', css('--ok')];
+  const cfg = { data:{ labels: bands.map(b=>b[0]), datasets:[
+      {type:'bar', label:'Sözleşme sayısı', data:cnt, backgroundColor:cols, yAxisID:'y', borderRadius:4},
+      {type:'line', label:'Ciro', data:rev.map(Math.round), yAxisID:'y2', borderColor:css('--accent'), pointRadius:3, tension:.3} ]},
+    options:{ maintainAspectRatio:false,
+      scales:{ y:{title:{display:true,text:'adet'}}, y2:{position:'right', grid:{display:false}, ticks:{callback:v=>fmtEurK(v)}} },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.dataset.type==='bar'?c.raw+' sözleşme':fmtEur(c.raw)+' ciro'}} } } };
+  if (chDist){ chDist.data=cfg.data; chDist.update(); }
+  else chDist = new Chart(document.getElementById('chDist'), cfg);
+}
+
+// ---------- Table ----------
+let sortKey = 'yillikEur', sortDir = -1;
+function badge(r){
+  const map = {'Sağlıklı':'b-ok','İzleme':'b-warn','Kritik':'b-crit','Süresi dolmuş':'b-exp','Veri hatası':'b-err','Veri yok':'b-exp'};
+  return `<span class="badge ${map[r.health]}">${r.health}</span>`;
+}
+function renderTable(rows){
+  const sorted = [...rows].sort((a,b)=>{
+    let va=a[sortKey], vb=b[sortKey];
+    if (va===null||va===undefined) return 1; if (vb===null||vb===undefined) return -1;
+    if (typeof va==='string') return va.localeCompare(vb,'tr')*sortDir;
+    return (va-vb)*sortDir;
+  });
+  document.getElementById('tbody').innerHTML = sorted.map(r=>`<tr>
+    <td>${r.musteri}${r.tl?'<span class="tl-tag">TL→€</span>':''}</td>
+    <td style="font-family:var(--mono);color:var(--muted)">${r.contract}</td>
+    <td class="num">${fmtEur(r.yillikEur)}</td>
+    <td class="num">${r.son===null?'–':'%'+r.son.toFixed(1)}</td>
+    <td class="num">${r.ytd===null?'–':'%'+r.ytd.toFixed(1)}</td>
+    <td class="num" style="color:${r.trend===null?'inherit':(r.trend<-10?css('--crit'):(r.trend>10?css('--ok'):'inherit'))}">${r.trend===null?'–':(r.trend>0?'+':'')+r.trend.toFixed(1)}</td>
+    <td class="num">${r.daysToEnd===null?'–':(r.daysToEnd<0?'geçti':r.daysToEnd)}</td>
+    <td style="font-family:var(--mono)">${fmtDate(r.end)}</td>
+    <td>${badge(r)}</td>
+  </tr>`).join('');
+  document.getElementById('tblNote').textContent = `${sorted.length} kayıt gösteriliyor · Δ Trend = YTD − Son Dönem (negatif: marj bu yıl eriyor)`;
+}
+document.querySelectorAll('#tbl th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.k;
+    if (sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=-1; }
+    renderTable(filtered());
+  });
+});
+
+// ---------- Data quality ----------
+function renderDQ(){
+  const all = enrich();
+  const errs = all.filter(r=>r.dataError);
+  const exp = all.filter(r=>r.expired);
+  const dupCounts = {};
+  all.forEach(r=>dupCounts[r.contract]=(dupCounts[r.contract]||0)+1);
+  const dups = Object.entries(dupCounts).filter(([k,v])=>v>1);
+  const nofy = all.filter(r=>r.fy===null);
+  const items = [
+    {c:css('--err'), t:`<b>${errs.length} kayıtta bitiş &lt; başlangıç:</b> ${errs.map(r=>r.musteri+' ('+fmtDate(r.start)+' → '+fmtDate(r.end)+')').join(', ')} — SAP kaynağında tarih girişi kontrol edilmeli.`},
+    {c:css('--exp'), t:`<b>${exp.length} sözleşmenin süresi dolmuş</b> ama hâlâ listede. Uzama maddesiyle devam edenler (ör. A21–A23) ile gerçekten kapananlar ayrıştırılmalı — PowerBI'da ayrı bir "Uzama ile devam" statüsü önerilir.`},
+    {c:css('--warn'), t:`<b>${dups.length} sözleşme numarası birden fazla satırda:</b> ${dups.map(([k,v])=>k+' ('+v+'×)').join(', ')} — aynı çerçeve sözleşmenin alt kalemleri ise modelde parent/child ilişkisi kurulmalı, SM% değerleri satır bazında tekrar ediyor.`},
+    {c:css('--warn'), t:`<b>1 kayıtta FY SM% metin değer ("x/o"):</b> A68 — ölçüler bu tip değerleri sessizce düşürmemeli, DQ sayfasında raporlamalı.`},
+    {c:css('--accent'), t:`<b>1 sözleşme TL cinsinden:</b> A143 — para birimi ayrı kolonda tutulmalı; toplam bedel kolonunda € simgesiyle yazılmış olması karışıklık riski.`},
+  ];
+  document.getElementById('dqList').innerHTML = items.map(i=>
+    `<div class="dq-item"><span class="dot" style="background:${i.c}"></span><span>${i.t}</span></div>`).join('');
+}
+
+// ---------- wiring ----------
+function renderAll(){
+  const rows = filtered();
+  const fx = fxRate();
+  document.getElementById('fxNote').textContent = `A143: ₺1,2M → ${fmtEurK(1200000/fx)}`;
+  renderKPIs(rows);
+  renderHorizon(rows);
+  renderPareto(rows);
+  renderScatter(rows);
+  renderPipe(rows);
+  renderDist(rows);
+  renderTable(rows);
+}
+
+document.querySelectorAll('.chip[data-min]').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.chip[data-min]').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  state.min = +c.dataset.min;
+  document.getElementById('minVal').value = state.min;
+  renderAll();
+}));
+document.getElementById('minVal').addEventListener('change',e=>{
+  state.min = +e.target.value || 0;
+  document.querySelectorAll('.chip[data-min]').forEach(x=>x.classList.toggle('on', +x.dataset.min===state.min));
+  renderAll();
+});
+document.querySelectorAll('.chip[data-sm]').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.chip[data-sm]').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  state.smMax = +c.dataset.sm;
+  renderAll();
+}));
+document.getElementById('winSel').addEventListener('change',e=>{ state.win=e.target.value; renderAll(); });
+document.getElementById('cbExpired').addEventListener('change',e=>{ state.expired=e.target.checked; renderAll(); });
+document.getElementById('cbErr').addEventListener('change',e=>{ state.err=e.target.checked; renderAll(); });
+document.getElementById('fxRate').addEventListener('change', renderAll);
+document.getElementById('btnReset').addEventListener('click',()=>{
+  state.min=0; state.smMax=999; state.win='all'; state.expired=false; state.err=false;
+  document.getElementById('minVal').value=0;
+  document.getElementById('winSel').value='all';
+  document.getElementById('cbExpired').checked=false;
+  document.getElementById('cbErr').checked=false;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  document.querySelector('.chip[data-min="0"]').classList.add('on');
+  document.querySelector('.chip[data-sm="999"]').classList.add('on');
+  renderAll();
+});
+document.querySelector('.chip[data-min="0"]').classList.add('on');
+document.querySelector('.chip[data-sm="999"]').classList.add('on');
+window.addEventListener('resize', ()=>renderHorizon(filtered()));
+
+// ---------- Yeni dosya yükle (masaüstü köprüsü) ----------
+document.getElementById('btnNewFile').addEventListener('click', function(){
+  __NEW_FILE_HANDLER__
+});
+
+// ---------- Parse (veri okuma) uyarıları ----------
+(function(){
+  const dq = __PARSE_DQ__;
+  if (dq && dq.length){
+    document.getElementById('parseDqTitle').textContent =
+      `Dosya okunurken ${dq.length} uyarı oluştu (satırlar atlanmadı):`;
+    document.getElementById('parseDqList').innerHTML =
+      dq.map(m=>`<li>${m.replace(/</g,'&lt;')}</li>`).join('');
+    document.getElementById('parseDqBanner').style.display='block';
+  }
+})();
+
+renderDQ();
+renderAll();
+</script>
+</body>
+</html>
