@@ -37,25 +37,41 @@ pano verinizle birlikte gelir.
 
 ---
 
-## 2. Taşınabilir .exe üretme (Windows)
+## 2. Paketleme (Windows) — iki seçenek
+
+### A) Kurulum sihirbazı — Setup.exe (önerilen dağıtım)
+
+```bat
+kur_olustur.bat
+```
+Bu tek script: PyInstaller ile `.exe`'yi üretir, sonra **Inno Setup** ile bir
+kurulum sihirbazı paketler.
+
+Çıktı: `installer\Output\SozlesmePortfoyPaneli_Setup.exe`
+- Çift tıkla kurulur; **Başlat menüsü + (isteğe bağlı) masaüstü kısayolu** oluşur.
+- **Yönetici yetkisi istemez** — kullanıcı profiline kurar (`PrivilegesRequired=lowest`).
+- **Kaldır (uninstall)** desteği gelir; uygulama ikonu kısayollarda görünür.
+
+Gereksinim: **Inno Setup** (ücretsiz). Script bulamazsa şu şekilde kurabilirsiniz:
+```bat
+winget install JRSoftware.InnoSetup
+```
+veya <https://jrsoftware.org/isdl.php>. Kurup script'i tekrar çalıştırın.
+
+### B) Taşınabilir (portable) — kurulum yok
 
 ```bat
 derle.bat
 ```
-veya elle:
-```bat
-pip install -r requirements.txt pyinstaller
-pyinstaller build.spec
-```
+Çıktı: `dist\SozlesmePortfoyPaneli\` — **klasörün tamamını** kopyalayın,
+`SozlesmePortfoyPaneli.exe` ile çalıştırın. Kurulum/yönetici/internet gerekmez.
 
-Çıktı: `dist\SozlesmePortfoyPaneli\`
-- **Klasörün tamamını** kopyalayın (tek dosya değil — `onedir` modu).
-- `SozlesmePortfoyPaneli.exe` ile çalıştırın.
-- Kurulum yok, yönetici yetkisi yok, internet yok.
+---
 
 `onedir` modu bilinçli tercih edildi: `onefile`'a göre antivirüs yanlış-pozitif
 riski daha düşük ve ilk açılış daha hızlıdır (geçici dizine çıkarım yapmaz).
-UPX sıkıştırması da AV uyumu için kapalıdır.
+UPX sıkıştırması da AV uyumu için kapalıdır. Kurulum sihirbazı da bu klasörün
+tamamını paketler.
 
 > **WebView2 notu:** pywebview Windows'ta Microsoft Edge **WebView2** çalışma
 > zamanını kullanır. Windows 10/11'de genellikle hazırdır. Nadiren yoksa,
@@ -166,11 +182,15 @@ contract-portfolio-desktop/
 ├── assets/
 │   ├── chart.min.js             # Chart.js 4.4.1 (yerel, offline)
 │   ├── fonts.css + fonts/*.woff2 # IBM Plex (yerel, offline)
+│   ├── app.ico + make_icon.py   # uygulama ikonu (exe + kurulum + kısayol)
+├── installer/
+│   └── installer.iss            # Inno Setup betiği (Setup.exe üretir)
 ├── sample/
 │   ├── make_sample.py
 │   └── ornek_veri.xlsx
 ├── requirements.txt
 ├── build.spec        # PyInstaller (onedir, portable)
+├── kur_olustur.bat   # Setup.exe üretir (PyInstaller + Inno Setup)
 ├── calistir.bat / derle.bat / run.sh
 ```
 

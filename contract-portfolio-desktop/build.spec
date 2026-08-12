@@ -50,7 +50,7 @@ exe = EXE(
     upx=False,               # UPX kapalı -> AV yanlış-pozitif riski daha düşük
     console=False,           # pencereli uygulama (konsol yok)
     disable_windowed_traceback=False,
-    icon=None,
+    icon="assets/app.ico",
 )
 
 coll = COLLECT(
