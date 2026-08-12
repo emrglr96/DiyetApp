@@ -69,7 +69,7 @@ def build():
     img.save(out, format="ICO", sizes=sizes)
     # PNG önizleme (isteğe bağlı)
     img.save(os.path.join(here, "app_icon_preview.png"))
-    print("Yazıldı:", out)
+    print("app.ico yazildi:", out)
 
 
 if __name__ == "__main__":
