@@ -42,6 +42,19 @@
   .loadbtn:hover{filter:brightness(1.08)}
   .loadbtn:active{transform:translateY(1px)}
 
+  /* Yangın Yerleri (risk / öncelik) */
+  #firePanel{border-color:rgba(224,90,71,.35)}
+  .fire-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .fire-card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 14px}
+  .fire-card .fc-l{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600}
+  .fire-card .fc-v{font-family:var(--mono);font-size:23px;font-weight:600;margin-top:2px}
+  .fire-card .fc-h{font-size:11.5px;color:var(--faint);margin-top:2px}
+  .rchip{display:inline-block;padding:1px 8px;border-radius:20px;font-size:10.5px;border:1px solid;margin:1px 3px 1px 0;white-space:nowrap;font-weight:500}
+  .scorebar{display:inline-block;width:50px;height:7px;border-radius:4px;background:var(--line);overflow:hidden;vertical-align:middle;margin-right:7px}
+  .scorebar span{display:block;height:100%}
+  .scoreval{font-family:var(--mono);font-size:12px;color:var(--txt)}
+  .actcell{font-size:12px;color:var(--txt);min-width:210px}
+
   /* KPI */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
@@ -157,6 +170,21 @@
     </select>
   </div>
   <div class="fgroup">
+    <label>Sağlık (bubble ayrımı)</label>
+    <div class="chips" id="healthChips">
+      <button class="chip" data-health="Kritik">Kritik</button>
+      <button class="chip" data-health="İzleme">İzleme</button>
+      <button class="chip" data-health="Sağlıklı">Sağlıklı</button>
+      <button class="chip" data-health="Veri yok">Veri yok</button>
+    </div>
+  </div>
+  <div class="fgroup">
+    <label>Öncelik</label>
+    <div class="chips">
+      <button class="chip" id="chipFires">🔥 Sadece yangın yerleri</button>
+    </div>
+  </div>
+  <div class="fgroup">
     <label>Durum</label>
     <div style="display:flex;gap:14px">
       <label class="toggle"><input type="checkbox" id="cbExpired"> Süresi dolmuşları dahil et</label>
@@ -172,6 +200,16 @@
   <div class="kpi"><div class="l">Ağırlıklı SM%</div><div class="v" id="kSM">–</div><div class="h">ciro ağırlıklı, son dönem</div></div>
   <div class="kpi warn"><div class="l">6 ayda bitecek ciro</div><div class="v" id="kExp6">–</div><div class="h" id="kExp6H"></div></div>
   <div class="kpi crit"><div class="l">Kritik marj (&lt;%25)</div><div class="v" id="kCrit">–</div><div class="h" id="kCritH"></div></div>
+</div>
+
+<div class="panel" id="firePanel">
+  <h2>🔥 Yangın Yerleri — önceliklendirilmiş aksiyon listesi</h2>
+  <div class="desc">Risk skoru = marj sağlığı + yenileme aciliyeti + ciro büyüklüğü + marj trendi.
+    En yüksek skorlu sözleşmeler önce gelir; her satırda neden ve önerilen aksiyon var.
+    Yukarıdaki filtreler bu listeyi de daraltır.</div>
+  <div id="fireSummary" class="fire-summary"></div>
+  <div id="fireTableWrap"></div>
+  <div class="count-note" id="fireNote"></div>
 </div>
 
 <div class="panel">
@@ -261,7 +299,8 @@ const RAW = __RAW_DATA__;
 const TODAY = new Date(__TODAY_ARGS__);
 
 // ---------- state ----------
-const state = { min: 0, smMax: 999, win: 'all', expired: false, err: false };
+const state = { min: 0, smMax: 999, win: 'all', expired: false, err: false,
+                healthSel: new Set(), onlyFires: false };
 
 // ---------- helpers ----------
 const fmtEur = v => '€ ' + Math.round(v).toLocaleString('tr-TR');
@@ -288,18 +327,95 @@ function enrich(){
   });
 }
 
-function filtered(){
+// Temel filtre (yangın filtresi hariç) — min bedel, SM%, pencere, durum, sağlık.
+function filteredBase(){
   return enrich().filter(r => {
     if (r.yillikEur < state.min) return false;
     if (state.smMax !== 999 && !(r.son !== null && r.son < state.smMax)) return false;
     if (!state.expired && r.expired) return false;
     if (!state.err && r.dataError) return false;
+    if (state.healthSel.size && !state.healthSel.has(r.health)) return false;
     if (state.win !== 'all') {
       const lim = {'3':92,'6':183,'12':365}[state.win];
       if (r.dataError || r.daysToEnd === null || r.daysToEnd < 0 || r.daysToEnd > lim) return false;
     }
     return true;
   });
+}
+
+// Gösterilen satırlar (renderAll içinde hesaplanır; grafikler/tablo bunu kullanır).
+let _displayRows = [];
+let _fireList = [];
+const rowKey = r => r.contract + '|' + r.musteri;
+function filtered(){ return _displayRows; }
+
+// ---------- Risk skoru / Yangın Yerleri ----------
+function marginRisk(son){
+  if (son === null) return 0.5;
+  if (son < 0)  return 1.0;
+  if (son < 25) return 0.85;
+  if (son < 45) return 0.6;
+  if (son < 60) return 0.4;
+  if (son < 75) return 0.2;
+  return 0.08;
+}
+function urgencyRisk(d){
+  if (d === null) return 0.2;
+  if (d < 0)   return 0;      // süresi dolmuş ayrı ele alınır
+  if (d <= 90)  return 1.0;
+  if (d <= 183) return 0.7;
+  if (d <= 365) return 0.45;
+  if (d <= 548) return 0.25;
+  return 0.1;
+}
+function computeFires(base){
+  const active = base.filter(r => !r.expired);           // aktif + veri hatası
+  const maxY = Math.max(...active.map(r => r.yillikEur), 1);
+  const fires = [];
+  active.forEach(r => {
+    const mr = marginRisk(r.son);
+    const ur = r.dataError ? 0 : urgencyRisk(r.daysToEnd);
+    const trendPen = (r.trend !== null && r.trend < -10) ? 0.12 : 0;
+    let base01 = Math.min(1, 0.55*mr + 0.45*ur + trendPen);
+    const revW = 0.45 + 0.55 * Math.sqrt(r.yillikEur / maxY);
+    let score = Math.round(100 * base01 * revW);
+    if (r.dataError) score = Math.max(score, 60);
+    const concerning = r.dataError || mr >= 0.4 || ur >= 0.45 || trendPen > 0;
+    if (!concerning) return;
+
+    const reasons = [];
+    if (r.dataError) reasons.push({t:'veri hatası (bitiş<başlangıç)', c:'err'});
+    if (!r.dataError && r.daysToEnd !== null && r.daysToEnd >= 0){
+      if (r.daysToEnd <= 90)       reasons.push({t:r.daysToEnd+' günde bitiyor', c:'crit'});
+      else if (r.daysToEnd <= 183) reasons.push({t:r.daysToEnd+' günde bitiyor', c:'warn'});
+      else if (r.daysToEnd <= 365) reasons.push({t:r.daysToEnd+' günde bitiyor', c:'muted'});
+    }
+    if (r.son !== null){
+      if (r.son < 0)       reasons.push({t:'zararda (negatif marj)', c:'err'});
+      else if (r.son < 25) reasons.push({t:'kritik marj %'+r.son.toFixed(0), c:'crit'});
+      else if (r.son < 60) reasons.push({t:'izleme marjı %'+r.son.toFixed(0), c:'warn'});
+    } else reasons.push({t:'marj verisi yok', c:'muted'});
+    if (trendPen > 0) reasons.push({t:'marj eriyor (Δ'+r.trend.toFixed(0)+')', c:'warn'});
+    if (r.yillikEur >= 100000) reasons.push({t:'yüksek ciro', c:'accent'});
+
+    let action;
+    if (r.dataError) action = 'Kaynak veride bitiş<başlangıç; tarih düzeltilmeli.';
+    else if (r.daysToEnd !== null && r.daysToEnd >= 0 && r.daysToEnd <= 90)
+      action = 'ACİL: yenileme görüşmesi başlat' + (mr >= 0.6 ? ' + fiyat/marj revizyonu' : '') + '.';
+    else if (r.daysToEnd !== null && r.daysToEnd >= 0 && r.daysToEnd <= 183)
+      action = 'Yenileme hattına al, teklif hazırla' + (mr >= 0.6 ? '; marjı gözden geçir' : '') + '.';
+    else if (mr >= 0.6) action = 'Marj iyileştirme: kapsam ve maliyet gözden geçir.';
+    else action = 'İzlemeye al.';
+
+    let prio;
+    if (score >= 55 || (mr >= 0.85 && ur >= 0.7) || (r.dataError && mr >= 0.6)) prio = 'P1';
+    else if (score >= 32) prio = 'P2';
+    else prio = 'P3';
+
+    fires.push({r, score, prio, reasons, action});
+  });
+  fires.sort((a,b) => b.score - a.score);
+  return fires;
 }
 
 // ---------- KPIs ----------
@@ -484,31 +600,106 @@ document.querySelectorAll('#tbl th').forEach(th=>{
   });
 });
 
-// ---------- Data quality ----------
+// ---------- Yangın Yerleri render ----------
+const _RC = {err:'--err', crit:'--crit', warn:'--warn', accent:'--accent', muted:'--muted'};
+function reasonChip(x){
+  const c = css(_RC[x.c] || '--muted');
+  return `<span class="rchip" style="color:${c};border-color:${c}66;background:${c}18">${x.t}</span>`;
+}
+function prioBadge(p){ return `<span class="badge ${{P1:'b-crit',P2:'b-warn',P3:'b-exp'}[p]}">${p}</span>`; }
+function renderFires(fires){
+  const sumEur = list => list.reduce((s,f)=>s+f.r.yillikEur,0);
+  const groups = [
+    ['P1 · Acil', fires.filter(f=>f.prio==='P1'), '--crit'],
+    ['P2 · Yüksek', fires.filter(f=>f.prio==='P2'), '--warn'],
+    ['P3 · İzle', fires.filter(f=>f.prio==='P3'), '--faint'],
+  ];
+  document.getElementById('fireSummary').innerHTML = groups.map(([lbl,list,cv])=>
+    `<div class="fire-card" style="border-color:${css(cv)}66">
+       <div class="fc-l">${lbl}</div>
+       <div class="fc-v" style="color:${css(cv)}">${list.length}</div>
+       <div class="fc-h">${fmtEurK(sumEur(list))} ciro riskte</div></div>`).join('');
+
+  const top = fires.slice(0, 15);
+  if (!top.length){
+    document.getElementById('fireTableWrap').innerHTML =
+      `<div class="count-note">Seçili filtrede öncelikli (yangın) sözleşme yok. 👍</div>`;
+  } else {
+    const barColor = p => p==='P1'?css('--crit'):p==='P2'?css('--warn'):css('--faint');
+    document.getElementById('fireTableWrap').innerHTML =
+      `<div class="tscroll"><table>
+        <thead><tr><th>Öncelik</th><th>Risk</th><th>Müşteri</th><th>Sözleşme</th>
+          <th class="num">Yıllık (€)</th><th class="num">Son SM%</th><th class="num">Bitişe</th>
+          <th>Neden</th><th>Önerilen aksiyon</th></tr></thead>
+        <tbody>${top.map(f=>`<tr>
+          <td>${prioBadge(f.prio)}</td>
+          <td><span class="scorebar"><span style="width:${Math.min(100,f.score)}%;background:${barColor(f.prio)}"></span></span><span class="scoreval">${f.score}</span></td>
+          <td>${f.r.musteri}${f.r.tl?'<span class="tl-tag">TL→€</span>':''}</td>
+          <td style="font-family:var(--mono);color:var(--muted)">${f.r.contract}</td>
+          <td class="num">${fmtEur(f.r.yillikEur)}</td>
+          <td class="num">${f.r.son===null?'–':'%'+f.r.son.toFixed(1)}</td>
+          <td class="num">${f.r.daysToEnd===null?'–':(f.r.daysToEnd<0?'geçti':f.r.daysToEnd+' g')}</td>
+          <td>${f.reasons.map(reasonChip).join(' ')}</td>
+          <td class="actcell">${f.action}</td>
+        </tr>`).join('')}</tbody></table></div>`;
+  }
+  document.getElementById('fireNote').textContent =
+    fires.length > 15 ? `En yüksek 15 gösteriliyor · toplam ${fires.length} öncelikli sözleşme.`
+    : (fires.length ? `${fires.length} öncelikli sözleşme.` : '');
+}
+
+// ---------- Data quality (tamamen dinamik) ----------
+function listNames(rows, n){
+  const names = rows.map(r=>r.musteri);
+  const head = names.slice(0, n).join(', ');
+  return names.length > n ? `${head} +${names.length - n}` : head;
+}
 function renderDQ(){
   const all = enrich();
   const errs = all.filter(r=>r.dataError);
-  const exp = all.filter(r=>r.expired);
+  const exp  = all.filter(r=>r.expired);
   const dupCounts = {};
   all.forEach(r=>dupCounts[r.contract]=(dupCounts[r.contract]||0)+1);
   const dups = Object.entries(dupCounts).filter(([k,v])=>v>1);
-  const nofy = all.filter(r=>r.fy===null);
-  const items = [
-    {c:css('--err'), t:`<b>${errs.length} kayıtta bitiş &lt; başlangıç:</b> ${errs.map(r=>r.musteri+' ('+fmtDate(r.start)+' → '+fmtDate(r.end)+')').join(', ')} — SAP kaynağında tarih girişi kontrol edilmeli.`},
-    {c:css('--exp'), t:`<b>${exp.length} sözleşmenin süresi dolmuş</b> ama hâlâ listede. Uzama maddesiyle devam edenler (ör. A21–A23) ile gerçekten kapananlar ayrıştırılmalı — PowerBI'da ayrı bir "Uzama ile devam" statüsü önerilir.`},
-    {c:css('--warn'), t:`<b>${dups.length} sözleşme numarası birden fazla satırda:</b> ${dups.map(([k,v])=>k+' ('+v+'×)').join(', ')} — aynı çerçeve sözleşmenin alt kalemleri ise modelde parent/child ilişkisi kurulmalı, SM% değerleri satır bazında tekrar ediyor.`},
-    {c:css('--warn'), t:`<b>1 kayıtta FY SM% metin değer ("x/o"):</b> A68 — ölçüler bu tip değerleri sessizce düşürmemeli, DQ sayfasında raporlamalı.`},
-    {c:css('--accent'), t:`<b>1 sözleşme TL cinsinden:</b> A143 — para birimi ayrı kolonda tutulmalı; toplam bedel kolonunda € simgesiyle yazılmış olması karışıklık riski.`},
-  ];
+  const noSon = all.filter(r=>r.son===null);
+  const neg = all.filter(r=>r.son!==null && r.son<0);
+  const tl = all.filter(r=>r.tl);
+
+  const items = [];
+  if (errs.length) items.push({c:'--err',
+    t:`<b>${errs.length} kayıtta bitiş &lt; başlangıç:</b> ${errs.map(r=>r.musteri+' ('+fmtDate(r.start)+' → '+fmtDate(r.end)+')').slice(0,5).join(', ')}${errs.length>5?' +'+(errs.length-5):''} — kaynak veride tarih girişi kontrol edilmeli.`});
+  if (exp.length) items.push({c:'--exp',
+    t:`<b>${exp.length} sözleşmenin süresi dolmuş</b> ama hâlâ listede: ${listNames(exp,4)}. Uzama ile devam edenler ile gerçekten kapananlar ayrıştırılmalı.`});
+  if (dups.length) items.push({c:'--warn',
+    t:`<b>${dups.length} sözleşme numarası birden fazla satırda:</b> ${dups.map(([k,v])=>k+' ('+v+'×)').join(', ')} — çerçeve sözleşmenin alt kalemleri olabilir; SM% değerleri satır bazında tekrar edebilir.`});
+  if (noSon.length) items.push({c:'--warn',
+    t:`<b>${noSon.length} kayıtta 'Son Dönem SM%' boş/okunamayan</b> (ör. x/o metin): ${listNames(noSon,4)} — ölçüler bu değerleri sessizce düşürmemeli.`});
+  if (neg.length) items.push({c:'--crit',
+    t:`<b>${neg.length} sözleşme zararda</b> (negatif son dönem SM%): ${listNames(neg,5)}.`});
+  if (tl.length) items.push({c:'--accent',
+    t:`<b>${tl.length} sözleşme TL cinsinden:</b> ${listNames(tl,5)} — panodaki EUR/TRY kuruyla çevriliyor; para birimi ayrı kolonda tutulmalı.`});
+  if (!items.length) items.push({c:'--ok', t:'Belirgin bir veri kalitesi sorunu bulunmadı. 👍'});
+
   document.getElementById('dqList').innerHTML = items.map(i=>
-    `<div class="dq-item"><span class="dot" style="background:${i.c}"></span><span>${i.t}</span></div>`).join('');
+    `<div class="dq-item"><span class="dot" style="background:${css(i.c)}"></span><span>${i.t}</span></div>`).join('');
 }
 
 // ---------- wiring ----------
 function renderAll(){
-  const rows = filtered();
   const fx = fxRate();
-  document.getElementById('fxNote').textContent = `A143: ₺1,2M → ${fmtEurK(1200000/fx)}`;
+  const base = filteredBase();
+  _fireList = computeFires(base);
+  const fireKeys = new Set(_fireList.map(f => rowKey(f.r)));
+  _displayRows = state.onlyFires ? base.filter(r => fireKeys.has(rowKey(r))) : base;
+  const rows = _displayRows;
+
+  // FX notu — veriye bağlı (TL sözleşmelerin EUR karşılığı)
+  const tl = enrich().filter(r => r.tl);
+  const tlEur = tl.reduce((s,r)=>s + r.yillik/fx, 0);
+  document.getElementById('fxNote').textContent =
+    tl.length ? `${tl.length} TL sözleşme → ${fmtEurK(tlEur)}` : 'TL sözleşme yok';
+
+  renderFires(_fireList);
   renderKPIs(rows);
   renderHorizon(rows);
   renderPareto(rows);
@@ -536,12 +727,26 @@ document.querySelectorAll('.chip[data-sm]').forEach(c=>c.addEventListener('click
   state.smMax = +c.dataset.sm;
   renderAll();
 }));
+// Sağlık çoklu-seçim (bubble ayrımı için)
+document.querySelectorAll('#healthChips .chip').forEach(c=>c.addEventListener('click',()=>{
+  const h = c.dataset.health;
+  if (state.healthSel.has(h)) { state.healthSel.delete(h); c.classList.remove('on'); }
+  else { state.healthSel.add(h); c.classList.add('on'); }
+  renderAll();
+}));
+// Sadece yangın yerleri
+document.getElementById('chipFires').addEventListener('click',()=>{
+  state.onlyFires = !state.onlyFires;
+  document.getElementById('chipFires').classList.toggle('on', state.onlyFires);
+  renderAll();
+});
 document.getElementById('winSel').addEventListener('change',e=>{ state.win=e.target.value; renderAll(); });
 document.getElementById('cbExpired').addEventListener('change',e=>{ state.expired=e.target.checked; renderAll(); });
 document.getElementById('cbErr').addEventListener('change',e=>{ state.err=e.target.checked; renderAll(); });
 document.getElementById('fxRate').addEventListener('change', renderAll);
 document.getElementById('btnReset').addEventListener('click',()=>{
   state.min=0; state.smMax=999; state.win='all'; state.expired=false; state.err=false;
+  state.healthSel=new Set(); state.onlyFires=false;
   document.getElementById('minVal').value=0;
   document.getElementById('winSel').value='all';
   document.getElementById('cbExpired').checked=false;

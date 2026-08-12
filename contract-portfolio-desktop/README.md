@@ -1,8 +1,9 @@
 # Sözleşme Portföy Paneli — Masaüstü Uygulaması
 
 Excel dosyanızı yükleyin; sözleşme portföyünüz **yenileme riski** ve **marj sağlığı**
-açısından interaktif bir panoda görünsün. Uygulama, hazır dashboard'un tüm
-hesap/filtre/grafik mantığını korur; yalnızca veriyi sizin Excel'inizden okur.
+açısından interaktif bir panoda görünsün. Uygulama, hazır dashboard'un hesap/grafik
+çekirdeğini korur; üzerine **önceliklendirilmiş "Yangın Yerleri" listesi**, **dinamik
+veri kalitesi** ve **sağlık/öncelik filtreleri** ekler.
 
 - **Tek pencere masaüstü hissi** (pywebview). pywebview başlatılamazsa otomatik
   olarak yerel bir sunucuya düşer ve varsayılan tarayıcıda açılır.
@@ -106,7 +107,38 @@ Kolon adları ve sırası **birebir** şöyle olmalı (başlık ilk satırda):
 
 ---
 
-## 5. Pano içinden yeni dosya
+## 5. 🔥 Yangın Yerleri — önceliklendirme
+
+KPI'ların hemen altındaki panel, her sözleşmeye şeffaf bir **risk skoru (0–100)**
+verir ve en yüksek skorluları **P1 / P2 / P3** önceliğiyle sıralar. Her satırda
+**neden etiketleri** ve **önerilen aksiyon** yer alır.
+
+**Risk skoru** dört bileşenden gelir:
+
+| Bileşen | Ağırlık | Mantık |
+|---------|---------|--------|
+| Marj sağlığı (`son` SM%) | %55 | negatif → 1.0, `<%25` → 0.85, `<%60` → 0.4 … |
+| Yenileme aciliyeti (`daysToEnd`) | %45 | ≤90 gün → 1.0, ≤183 → 0.7, ≤365 → 0.45 … |
+| Marj trendi | +0.12 | `Δ (YTD−Son) < −10` ise erozyon cezası |
+| Ciro büyüklüğü | çarpan | `0.45 + 0.55·√(yıllık/enBüyük)` — büyük ciro önceliği yükseltir |
+
+Veri hatası olan (bitiş<başlangıç) satırlar taban 60 skorla işaretlenir.
+**Öncelik**: skor ≥55 → **P1 (Acil)**, ≥32 → **P2 (Yüksek)**, aksi → **P3 (İzle)**.
+Süresi dolmuş sözleşmeler yenileme yangını sayılmaz (ayrı DQ maddesi olur).
+
+**Önerilen aksiyon** örnekleri: `≤90 gün` → "ACİL: yenileme görüşmesi + fiyat/marj
+revizyonu"; `≤183 gün` → "Yenileme hattına al, teklif hazırla"; kritik marj →
+"Marj iyileştirme: kapsam ve maliyet gözden geçir".
+
+## 6. Filtreleme ve bubble ayrımı
+
+Filtre barındaki **Sağlık** çipleri (Kritik / İzleme / Sağlıklı / Veri yok) çoklu
+seçimlidir; risk haritası (bubble) ile yenileme ufku noktalarını **tek sağlık
+sınıfına indirip net ayırt etmenizi** sağlar. **🔥 Sadece yangın yerleri** çipi
+tüm panoyu öncelikli sözleşmelere daraltır. Diğer filtreler (min bedel, SM%,
+yenileme penceresi, durum) Yangın Yerleri listesini de daraltır.
+
+## 7. Pano içinden yeni dosya
 
 Panonun sağ üstündeki **"↥ Yeni dosya yükle"** ile istediğiniz zaman farklı bir
 Excel yükleyebilirsiniz. Son yüklenen dosyanın yolu hatırlanır; açılış ekranında
@@ -116,7 +148,7 @@ Ayar dosyası: `%APPDATA%\SozlesmePortfoyPaneli\config.json` (Windows).
 
 ---
 
-## 6. Proje yapısı
+## 8. Proje yapısı
 
 ```
 contract-portfolio-desktop/
@@ -142,28 +174,35 @@ contract-portfolio-desktop/
 ├── calistir.bat / derle.bat / run.sh
 ```
 
-**Tasarım ilkesi:** `dashboard_template.html` içindeki hesaplama/filtre/grafik
-kodu **değiştirilmedi**. Sadece şu yer tutucular dolduruluyor: veri (`__RAW_DATA__`),
-güncel tarih (`__TODAY_ARGS__`), yerel varlıklar ve "yeni dosya" köprüsü.
+**Tasarım ilkesi:** Prototipin KPI/grafik hesap çekirdeği korundu; veri katmanı
+(`__RAW_DATA__`, `__TODAY_ARGS__`, yerel varlıklar, "yeni dosya" köprüsü) enjekte
+edilir. Üzerine **Yangın Yerleri (risk skoru + öncelik + aksiyon)**, **dinamik veri
+kalitesi paneli** ve **sağlık/öncelik filtreleri** eklendi.
 
 ---
 
-## 7. Bilinen sınırlamalar
+## 9. Veri kalitesi (tamamen dinamik)
 
-- Panonun **"Veri kalitesi bulguları"** bölümündeki bazı örnek etiketler
-  (ör. `A68`, `A143`, `A21–A23`) ve başlıktaki küçük `A143: ₺…` kur ipucu,
-  orijinal prototip HTML'inden gelen **sabit metinlerdir**. Sayımlar (kaç veri
-  hatası, kaç mükerrer sözleşme vb.) ve "bitiş < başlangıç" listesi verinizden
-  **dinamik** üretilir; yalnızca bu birkaç örnek ad statiktir. Prototip
-  mantığına dokunmama ilkesi gereği olduğu gibi bırakıldı — istenirse bu paneli
-  tümüyle veriye bağlı hale getirmek küçük bir ek iştir.
-- Dosya okuma sırasında oluşan gerçek veri kalitesi uyarıları (metin SM%,
-  okunamayan tarih vb.) panonun üstünde ayrı bir şeritte, verinize özgü olarak
-  gösterilir.
+- **"Veri kalitesi bulguları"** paneli artık **tümüyle verinizden** üretilir:
+  bitiş<başlangıç kayıtları, süresi dolup listede kalanlar, mükerrer sözleşme
+  numaraları, boş/okunamayan SM% (`x/o`), zarardaki sözleşmeler ve TL kayıtlar
+  — hepsi gerçek isim ve sayılarla listelenir. (Önceki prototipteki sabit örnek
+  adlar `A68`/`A143`/`A21–A23` kaldırıldı.)
+- Ayrıca **dosya okuma sırasında** oluşan ayrıştırma uyarıları (metin SM%,
+  okunamayan tarih vb.) panonun en üstünde ayrı bir şeritte, "hangi satır /
+  hangi kolon" bilgisiyle gösterilir.
+
+## 10. Bilinen notlar
+
+- Hesaplama/grafik çekirdeği hazır prototipten korunur; üzerine Yangın Yerleri,
+  dinamik DQ, sağlık filtresi ve dinamik kur notu **eklendi**.
+- Risk skoru ağırlıkları `dashboard_template.html` içindeki `marginRisk` /
+  `urgencyRisk` / `computeFires` fonksiyonlarında; iş kuralınıza göre kolayca
+  ayarlanabilir.
 
 ---
 
-## 8. Sık sorulanlar
+## 11. Sık sorulanlar
 
 **Uygulama açılmıyor / boş pencere?** WebView2 çalışma zamanı eksik olabilir;
 uygulama otomatik tarayıcı moduna düşer. Düşmezse
