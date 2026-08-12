@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sözleşme Portföy Paneli — PowerBI Prototip</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#10151C; --panel:#182029; --panel2:#1D2732; --line:#26303C;
+    --txt:#DEE6EE; --muted:#8A98A8; --faint:#5A6876;
+    --ok:#3FB68B; --warn:#E0A83C; --crit:#E05A47; --exp:#5A6876; --err:#B06AD4;
+    --accent:#4FA3D9;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.45;padding:20px 22px 60px}
+  h1{font-size:19px;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:14px}
+  .fx{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .fx input{width:72px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 8px;font-family:var(--mono);font-size:13px}
+  .fx input:focus{outline:2px solid var(--accent);outline-offset:1px}
+
+  /* Filters */
+  .filters{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .fgroup{display:flex;flex-direction:column;gap:6px}
+  .fgroup label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600}
+  .chips{display:flex;gap:6px}
+  .chip{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 11px;font-size:12.5px;cursor:pointer;font-family:var(--mono)}
+  .chip:hover{border-color:var(--accent)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#0C1319;font-weight:600}
+  .fgroup input[type=number], .fgroup select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 9px;font-size:13px;font-family:var(--mono)}
+  .fgroup input:focus,.fgroup select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .toggle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--txt);cursor:pointer;user-select:none}
+  .toggle input{accent-color:var(--accent);width:15px;height:15px}
+  .reset{margin-left:auto;background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer}
+  .reset:hover{color:var(--txt);border-color:var(--muted)}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .kpi .v{font-family:var(--mono);font-size:22px;font-weight:600;margin-top:3px}
+  .kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600}
+  .kpi .h{font-size:11.5px;color:var(--faint);margin-top:3px}
+  .kpi.crit .v{color:var(--crit)}
+  .kpi.warn .v{color:var(--warn)}
+
+  /* Panels */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+  .panel h2{font-size:14px;font-weight:600;margin-bottom:2px}
+  .panel .desc{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:980px){.grid2{grid-template-columns:1fr}}
+  .chartbox{position:relative;height:300px}
+
+  /* Renewal horizon (signature) */
+  .horizon{position:relative;height:118px;margin-top:8px}
+  .h-axis{position:absolute;left:0;right:0;top:78px;border-top:1px solid var(--line)}
+  .h-month{position:absolute;top:82px;font-size:10.5px;color:var(--faint);font-family:var(--mono);transform:translateX(-50%);white-space:nowrap}
+  .h-tick{position:absolute;top:74px;height:8px;border-left:1px solid var(--line)}
+  .h-dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%);cursor:pointer;opacity:.92;border:1px solid rgba(255,255,255,.25)}
+  .h-dot:hover{opacity:1;border-color:#fff;z-index:5}
+  .h-now{position:absolute;top:0;bottom:26px;border-left:2px solid var(--accent)}
+  .h-now span{position:absolute;top:-2px;left:6px;font-size:10.5px;color:var(--accent);font-family:var(--mono)}
+  .tooltip{position:fixed;background:#0C1218;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:12px;pointer-events:none;z-index:50;display:none;max-width:260px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+  .tooltip b{font-family:var(--mono)}
+
+  /* Table */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
+  th:hover{color:var(--txt)}
+  th.num,td.num{text-align:right;font-family:var(--mono)}
+  td{padding:7px 10px;border-bottom:1px solid rgba(38,48,60,.55)}
+  tr:hover td{background:rgba(79,163,217,.06)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .b-ok{background:rgba(63,182,139,.16);color:var(--ok)}
+  .b-warn{background:rgba(224,168,60,.16);color:var(--warn)}
+  .b-crit{background:rgba(224,90,71,.18);color:var(--crit)}
+  .b-exp{background:rgba(90,104,118,.22);color:#9AA7B4}
+  .b-err{background:rgba(176,106,212,.16);color:var(--err)}
+  .tl-tag{font-size:10px;color:var(--warn);font-family:var(--mono);margin-left:4px}
+  .tscroll{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .tscroll th{position:sticky;top:0;background:var(--panel);z-index:2}
+  .count-note{font-size:12px;color:var(--muted);margin-top:8px}
+
+  /* PowerBI spec */
+  .spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+  .spec-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:13px 15px}
+  .spec-card h3{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px}
+  .spec-card p{font-size:12.5px;color:var(--muted)}
+  .spec-card code{font-family:var(--mono);font-size:11.5px;color:var(--txt);background:rgba(79,163,217,.1);padding:1px 5px;border-radius:4px}
+  .dq{display:flex;flex-direction:column;gap:8px}
+  .dq-item{display:flex;gap:10px;align-items:baseline;font-size:12.5px}
+  .dq-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;position:relative;top:0}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Sözleşme Portföy Paneli</h1>
+    <div class="sub">PowerBI prototip · 148 sözleşme · Referans tarihi: 12.08.2026 · Manipüle veri</div>
+  </div>
+  <div class="fx">
+    <span>EUR/TRY kuru</span>
+    <input type="number" id="fxRate" value="48" step="0.5" min="1">
+    <span id="fxNote" style="font-size:11px"></span>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="fgroup">
+    <label>Min. yıllık bedel (€)</label>
+    <div class="chips">
+      <button class="chip" data-min="0">Tümü</button>
+      <button class="chip" data-min="25000">≥25k</button>
+      <button class="chip" data-min="50000">≥50k</button>
+      <button class="chip" data-min="100000">≥100k</button>
+      <input type="number" id="minVal" value="0" step="5000" min="0" style="width:90px" title="Serbest değer">
+    </div>
+  </div>
+  <div class="fgroup">
+    <label>Son dönem SM% en fazla</label>
+    <div class="chips">
+      <button class="chip" data-sm="999">Tümü</button>
+      <button class="chip" data-sm="60">&lt;%60</button>
+      <button class="chip" data-sm="25">&lt;%25</button>
+      <button class="chip" data-sm="0">&lt;%0</button>
+    </div>
+  </div>
+  <div class="fgroup">
+    <label>Yenileme penceresi</label>
+    <select id="winSel">
+      <option value="all">Tümü</option>
+      <option value="3">0–3 ay içinde bitecek</option>
+      <option value="6">0–6 ay içinde bitecek</option>
+      <option value="12">0–12 ay içinde bitecek</option>
+    </select>
+  </div>
+  <div class="fgroup">
+    <label>Durum</label>
+    <div style="display:flex;gap:14px">
+      <label class="toggle"><input type="checkbox" id="cbExpired"> Süresi dolmuşları dahil et</label>
+      <label class="toggle"><input type="checkbox" id="cbErr"> Veri hatalarını dahil et</label>
+    </div>
+  </div>
+  <button class="reset" id="btnReset">Filtreleri sıfırla</button>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">Sözleşme</div><div class="v" id="kCount">–</div><div class="h" id="kCountH"></div></div>
+  <div class="kpi"><div class="l">Yıllık ciro</div><div class="v" id="kRev">–</div><div class="h">filtreli toplam</div></div>
+  <div class="kpi"><div class="l">Ağırlıklı SM%</div><div class="v" id="kSM">–</div><div class="h">ciro ağırlıklı, son dönem</div></div>
+  <div class="kpi warn"><div class="l">6 ayda bitecek ciro</div><div class="v" id="kExp6">–</div><div class="h" id="kExp6H"></div></div>
+  <div class="kpi crit"><div class="l">Kritik marj (&lt;%25)</div><div class="v" id="kCrit">–</div><div class="h" id="kCritH"></div></div>
+</div>
+
+<div class="panel">
+  <h2>Yenileme Ufku — önümüzdeki 24 ay</h2>
+  <div class="desc">Her nokta bir sözleşme: konum = bitiş tarihi, boyut = yıllık bedel, renk = marj sağlığı. Üzerine gelerek detayı görün.</div>
+  <div class="horizon" id="horizon"></div>
+  <div class="legend">
+    <span><i style="background:var(--ok)"></i> Sağlıklı (SM% &gt; 60)</span>
+    <span><i style="background:var(--warn)"></i> İzleme (25–60)</span>
+    <span><i style="background:var(--crit)"></i> Kritik (&lt; 25)</span>
+    <span><i style="background:var(--accent);border-radius:0;width:2px;height:12px"></i> Bugün</span>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Pareto — ciro konsantrasyonu</h2>
+    <div class="desc">Müşteriler yıllık bedele göre sıralı; çizgi kümülatif payı gösterir.</div>
+    <div class="chartbox"><canvas id="chPareto"></canvas></div>
+    <div class="count-note" id="paretoNote"></div>
+  </div>
+  <div class="panel">
+    <h2>Bedel × Marj — risk haritası</h2>
+    <div class="desc">X: yıllık bedel (log) · Y: son dönem SM% · boyut: toplam sözleşme bedeli. Sağ alt köşe = büyük ve zararlı.</div>
+    <div class="chartbox"><canvas id="chScatter"></canvas></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Yenileme pipeline — riske giren ciro</h2>
+    <div class="desc">Aktif sözleşmelerin bitiş tarihine göre dilimlenmiş yıllık ciro toplamı.</div>
+    <div class="chartbox" style="height:260px"><canvas id="chPipe"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>Marj dağılımı</h2>
+    <div class="desc">Son dönem SM% bantlarına göre sözleşme sayısı ve ciro.</div>
+    <div class="chartbox" style="height:260px"><canvas id="chDist"></canvas></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Sözleşme listesi</h2>
+  <div class="desc">Başlıklara tıklayarak sıralayın. YTD ile son dönem SM% arasındaki fark trend sinyalidir.</div>
+  <div class="tscroll">
+  <table id="tbl">
+    <thead><tr>
+      <th data-k="musteri">Müşteri</th>
+      <th data-k="contract">Sözleşme No</th>
+      <th data-k="yillikEur" class="num">Yıllık (€)</th>
+      <th data-k="son" class="num">Son Dönem SM%</th>
+      <th data-k="ytd" class="num">YTD SM%</th>
+      <th data-k="trend" class="num">Δ Trend</th>
+      <th data-k="daysToEnd" class="num">Bitişe (gün)</th>
+      <th data-k="end">Bitiş</th>
+      <th data-k="health">Sağlık</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  </div>
+  <div class="count-note" id="tblNote"></div>
+</div>
+
+<div class="panel">
+  <h2>Veri kalitesi bulguları</h2>
+  <div class="desc">PowerBI'da ayrı bir "Data Quality" sayfası olarak kurgulanmalı — bu bulgular otomatik yakalanmalı.</div>
+  <div class="dq" id="dqList"></div>
+</div>
+
+<div class="panel">
+  <h2>PowerBI kurulum rehberi — ekip için</h2>
+  <div class="desc">Bu prototipteki her bileşenin PowerBI karşılığı. Model: tek fact tablosu (sözleşmeler) + tarih boyut tablosu.</div>
+  <div class="spec">
+    <div class="spec-card"><h3>1 · Slicer'lar</h3><p>Yukarıdaki filtre barı = PowerBI slicer paneli. <code>Min Yıllık Bedel</code> (numeric range slicer), <code>SM% Bandı</code>, <code>Yenileme Penceresi</code> (hesaplanmış kolon: 0-3 / 3-6 / 6-12 ay / Sonrası), <code>Durum</code> (Aktif / Süresi Dolmuş / Veri Hatası).</p></div>
+    <div class="spec-card"><h3>2 · Temel measure'lar</h3><p><code>Toplam Yıllık Ciro = SUM(Yıllık Bedel EUR)</code> · <code>Ağırlıklı SM% = SUMX(bedel × SM%) / SUM(bedel)</code> — basit AVERAGE değil, ciro ağırlıklı olmalı. · <code>Riske Giren Ciro 6A</code> = bitişi 183 gün içindeki aktiflerin toplamı.</p></div>
+    <div class="spec-card"><h3>3 · Hesaplanmış kolonlar</h3><p><code>Bitişe Kalan Gün = DATEDIFF(TODAY, Bitiş)</code> · <code>Sağlık = kritik &lt;25 / izleme 25-60 / sağlıklı &gt;60</code> · <code>Trend Δ = YTD SM% − Son Dönem SM%</code> · <code>Yıllık Bedel EUR</code>: TL sözleşmeler için kur parametresi ile çevrim (What-if parameter).</p></div>
+    <div class="spec-card"><h3>4 · Kur çevrimi</h3><p>EUR/TRY için <code>What-if Parameter</code> kullanın — sabit değer gömmeyin. İdealde TCMB kurunu Power Query ile çekip aylık ortalama uygulayın; hangi satırın TL olduğu ayrı bir <code>Para Birimi</code> kolonunda tutulmalı.</p></div>
+    <div class="spec-card"><h3>5 · Görseller</h3><p>Yenileme Ufku → dispersion/dot plot (custom visual) veya Gantt. Pareto → combo chart (bar + kümülatif line measure). Risk haritası → scatter, X ekseni log ölçek. Pipeline → clustered bar, hesaplanmış pencere kolonuyla.</p></div>
+    <div class="spec-card"><h3>6 · Data Quality sayfası</h3><p>Otomatik kurallar: <code>Bitiş &lt; Başlangıç</code>, süresi dolup listede kalanlar, aynı sözleşme numarasına bağlı çoklu satırlar (ör. 7083000317, 7083000499), SM% boş/metin değerler (<code>x/o</code>). Her kural bir kart + detay tablosu.</p></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+const RAW = [{"contract": "7083000473", "musteri": "A1", "yillik": 40000.0, "tl": false, "ytd": 20.32, "fy": -16.32, "son": 21.04, "start": "2024-01-01", "end": "2027-12-31", "years": [40000.0, 40000.0, 40000.0, null, null], "toplam": 120000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000306", "musteri": "A2", "yillik": 100000.0, "tl": false, "ytd": 78.42, "fy": 77.71, "son": 71.68, "start": "2024-01-01", "end": "2027-12-31", "years": [73600.0, 88000.0, 88000.0, 88000.0, null], "toplam": 337600.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000371", "musteri": "A3", "yillik": 28000.0, "tl": false, "ytd": 83.01, "fy": 79.06, "son": 88.14, "start": "2025-03-01", "end": "2026-02-28", "years": [28000.0, null, null, null, null], "toplam": 28000.0, "not": "", "daysToEnd": -165, "dataError": false, "expired": true}, {"contract": "7083000558", "musteri": "A4", "yillik": 41000.0, "tl": false, "ytd": 84.05, "fy": 99.97, "son": 85.08, "start": "2025-03-01", "end": "2028-03-31", "years": [41000.0, 41000.0, 41000.0, null, null], "toplam": 123000.0, "not": "", "daysToEnd": 597, "dataError": false, "expired": false}, {"contract": "7083000570", "musteri": "A5", "yillik": 24000.0, "tl": false, "ytd": 100.0, "fy": 100.0, "son": 100.0, "start": "2025-06-01", "end": "2026-05-31", "years": [24000.0, null, null, null, null], "toplam": 24000.0, "not": "", "daysToEnd": -73, "dataError": false, "expired": true}, {"contract": "7083000560", "musteri": "A6", "yillik": 29000.0, "tl": false, "ytd": 83.67, "fy": 80.27, "son": 85.11, "start": "2025-08-01", "end": "2026-07-31", "years": [29000.0, null, null, null, null], "toplam": 29000.0, "not": "", "daysToEnd": -12, "dataError": false, "expired": true}, {"contract": "7083000452", "musteri": "A7", "yillik": 19900.0, "tl": false, "ytd": 93.61, "fy": 100.0, "son": 83.22, "start": "2021-02-01", "end": "2024-01-31", "years": [9950.0, 9950.0, 9950.0, null, null], "toplam": 29850.0, "not": "", "daysToEnd": -924, "dataError": false, "expired": true}, {"contract": "7083000503", "musteri": "A8", "yillik": 18500.0, "tl": false, "ytd": 81.94, "fy": 100.0, "son": 100.0, "start": "2026-06-01", "end": "2026-05-31", "years": [9250.0, 9250.0, 9250.0, null, null], "toplam": 27750.0, "not": "", "daysToEnd": -73, "dataError": true, "expired": false}, {"contract": "7083000539", "musteri": "A9", "yillik": 68000.0, "tl": false, "ytd": 26.82, "fy": -49.41, "son": 26.82, "start": "2023-06-15", "end": "2026-06-14", "years": [68000.0, 74500.0, 74000.0, null, null], "toplam": 216500.0, "not": "", "daysToEnd": -59, "dataError": false, "expired": true}, {"contract": "7083000555", "musteri": "A10", "yillik": 100000.0, "tl": false, "ytd": 32.93, "fy": 38.75, "son": 34.98, "start": "2025-03-24", "end": "2027-03-23", "years": [100000.0, 100000.0, null, null, null], "toplam": 200000.0, "not": "", "daysToEnd": 223, "dataError": false, "expired": false}, {"contract": "7083000537", "musteri": "A11", "yillik": 23800.0, "tl": false, "ytd": 3.7, "fy": 8.54, "son": 9.32, "start": "2024-08-01", "end": "2025-07-31", "years": [23800.0, null, null, null, null], "toplam": 23800.0, "not": "", "daysToEnd": -377, "dataError": false, "expired": true}, {"contract": "7083000291", "musteri": "A12", "yillik": 50000.0, "tl": false, "ytd": 77.72, "fy": 77.21, "son": 70.8, "start": "2024-10-15", "end": "2029-10-14", "years": [50000.0, 50000.0, 50000.0, 50000.0, 50000.0], "toplam": 250000.0, "not": "", "daysToEnd": 1159, "dataError": false, "expired": false}, {"contract": "7083000522", "musteri": "A13", "yillik": 89500.0, "tl": false, "ytd": 69.22, "fy": 95.64, "son": 79.24, "start": "2022-12-15", "end": "2023-12-14", "years": [89500.0, null, null, null, null], "toplam": 89500.0, "not": "", "daysToEnd": -972, "dataError": false, "expired": true}, {"contract": "7083000369", "musteri": "A14", "yillik": 13600.0, "tl": false, "ytd": 77.05, "fy": 71.75, "son": 65.42, "start": "2026-01-01", "end": "2026-12-31", "years": [13600.0, null, null, null, null], "toplam": 13600.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000428", "musteri": "A15", "yillik": 56000.0, "tl": false, "ytd": 73.82, "fy": 94.68, "son": 84.07, "start": "2024-04-01", "end": "2027-03-31", "years": [56000.0, 56000.0, 56000.0, null, null], "toplam": 168000.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000486", "musteri": "A16", "yillik": 13000.0, "tl": false, "ytd": 27.59, "fy": -17.76, "son": 24.84, "start": "2025-02-01", "end": "2026-01-31", "years": [13000.0, null, null, null, null], "toplam": 13000.0, "not": "", "daysToEnd": -193, "dataError": false, "expired": true}, {"contract": "7083000360", "musteri": "A17", "yillik": 17300.0, "tl": false, "ytd": 94.08, "fy": 100.0, "son": 92.88, "start": "2024-11-15", "end": "2027-11-14", "years": [25200.0, 25200.0, 25200.0, null, null], "toplam": 75600.0, "not": "", "daysToEnd": 459, "dataError": false, "expired": false}, {"contract": "7083000536", "musteri": "A18", "yillik": 25200.0, "tl": false, "ytd": 91.29, "fy": 100.0, "son": 100.0, "start": "2025-08-01", "end": "2026-07-31", "years": [25200.0, null, null, null, null], "toplam": 25200.0, "not": "", "daysToEnd": -12, "dataError": false, "expired": true}, {"contract": "7083000542", "musteri": "A19", "yillik": 14750.0, "tl": false, "ytd": 53.67, "fy": 60.01, "son": 46.85, "start": "2023-11-01", "end": "2024-11-01", "years": [14750.0, null, null, null, null], "toplam": 14750.0, "not": "", "daysToEnd": -649, "dataError": false, "expired": true}, {"contract": "7083000389", "musteri": "A20", "yillik": 14000.0, "tl": false, "ytd": 94.14, "fy": 99.39, "son": 93.97, "start": "2019-05-01", "end": "2021-05-01", "years": [14000.0, 14000.0, null, null, null], "toplam": 28000.0, "not": "", "daysToEnd": -1929, "dataError": false, "expired": true}, {"contract": "7083000317", "musteri": "A21", "yillik": 30000.0, "tl": false, "ytd": 85.15, "fy": 93.31, "son": 93.21, "start": "2017-05-01", "end": "2019-05-01", "years": [30000.0, 30000.0, null, null, null], "toplam": 60000.0, "not": "Sözleşme uzama md. istinaden devam ediyor. Yeni bir sözleşme mevcut değil", "daysToEnd": -2660, "dataError": false, "expired": true}, {"contract": "7083000317", "musteri": "A22", "yillik": 22700.0, "tl": false, "ytd": 85.15, "fy": 93.31, "son": 86.81, "start": "2024-02-01", "end": "2026-01-31", "years": [22700.0, 22700.0, null, null, null], "toplam": 45400.0, "not": "Sözleşme uzama md. istinaden devam ediyor. Yeni bir sözleşme mevcut değil", "daysToEnd": -193, "dataError": false, "expired": true}, {"contract": "7083000317", "musteri": "A23", "yillik": 7500.0, "tl": false, "ytd": 85.15, "fy": 93.31, "son": 80.47, "start": "2022-03-01", "end": "2024-02-28", "years": [7500.0, 7500.0, null, null, null], "toplam": 15000.0, "not": "Sözleşme uzama md. istinaden devam ediyor. Yeni bir sözleşme mevcut değil", "daysToEnd": -896, "dataError": false, "expired": true}, {"contract": "7083000300", "musteri": "A24", "yillik": 17000.0, "tl": false, "ytd": 92.19, "fy": 100.0, "son": 77.32, "start": "2014-08-01", "end": "2016-08-01", "years": [17000.0, 17000.0, null, null, null], "toplam": 34000.0, "not": "", "daysToEnd": -3663, "dataError": false, "expired": true}, {"contract": "7083000164", "musteri": "A25", "yillik": 129000.0, "tl": false, "ytd": 73.33, "fy": 96.64, "son": 80.22, "start": "2024-07-01", "end": "2027-06-30", "years": [129000.0, 136000.0, 140000.0, null, null], "toplam": 405000.0, "not": "", "daysToEnd": 322, "dataError": false, "expired": false}, {"contract": "7083000164", "musteri": "A26", "yillik": 88200.0, "tl": false, "ytd": 73.33, "fy": 96.64, "son": 13.69, "start": "2026-07-07", "end": "2027-07-06", "years": [88200.0, null, null, null, null], "toplam": 88200.0, "not": "", "daysToEnd": 328, "dataError": false, "expired": false}, {"contract": "7083000552", "musteri": "A27", "yillik": 99200.0, "tl": false, "ytd": 80.06, "fy": 77.52, "son": 81.04, "start": "2024-02-01", "end": "2027-01-31", "years": [99200.0, 99200.0, 99200.0, null, null], "toplam": 297600.0, "not": "", "daysToEnd": 172, "dataError": false, "expired": false}, {"contract": "7083000456", "musteri": "A28", "yillik": 77800.0, "tl": false, "ytd": 65.65, "fy": 87.16, "son": 64.24, "start": "2024-01-01", "end": "2026-12-31", "years": [77800.0, 77800.0, 77800.0, null, null], "toplam": 233400.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000460", "musteri": "A29", "yillik": 26500.0, "tl": false, "ytd": 90.83, "fy": 93.5, "son": 92.15, "start": "2024-11-01", "end": "2027-10-31", "years": [26500.0, 26500.0, 26500.0, null, null], "toplam": 79500.0, "not": "", "daysToEnd": 445, "dataError": false, "expired": false}, {"contract": "7083000232", "musteri": "A30", "yillik": 10500.0, "tl": false, "ytd": -29.01, "fy": -210.59, "son": -8.11, "start": "2020-08-01", "end": "2023-07-31", "years": [10500.0, 10500.0, 10500.0, null, null], "toplam": 31500.0, "not": "", "daysToEnd": -1108, "dataError": false, "expired": true}, {"contract": "7083000513", "musteri": "A31", "yillik": 190000.0, "tl": false, "ytd": 62.23, "fy": 46.85, "son": 59.5, "start": "2025-02-07", "end": "2028-02-06", "years": [190000.0, 190000.0, 190000.0, null, null], "toplam": 570000.0, "not": "", "daysToEnd": 543, "dataError": false, "expired": false}, {"contract": "7083000303", "musteri": "A32", "yillik": 27000.0, "tl": false, "ytd": 74.17, "fy": 74.53, "son": 96.21, "start": "2018-11-01", "end": "2019-11-01", "years": [27000.0, null, null, null, null], "toplam": 27000.0, "not": "", "daysToEnd": -2476, "dataError": false, "expired": true}, {"contract": "7083000408", "musteri": "A33", "yillik": 93000.0, "tl": false, "ytd": 65.81, "fy": 77.45, "son": 89.84, "start": "2026-08-01", "end": "2026-07-31", "years": [93000.0, 93000.0, 93000.0, null, null], "toplam": 279000.0, "not": "", "daysToEnd": -12, "dataError": true, "expired": false}, {"contract": "7083000378", "musteri": "A34", "yillik": 71000.0, "tl": false, "ytd": 83.5, "fy": 80.56, "son": 82.64, "start": "2024-10-01", "end": "2027-09-30", "years": [71000.0, 71000.0, 71000.0, null, null], "toplam": 213000.0, "not": "", "daysToEnd": 414, "dataError": false, "expired": false}, {"contract": "7083000095", "musteri": "A35", "yillik": 15000.0, "tl": false, "ytd": 67.75, "fy": 96.83, "son": 94.58, "start": "2024-09-01", "end": "2027-08-31", "years": [15000.0, 15000.0, 15000.0, null, null], "toplam": 45000.0, "not": "", "daysToEnd": 384, "dataError": false, "expired": false}, {"contract": "7083000476", "musteri": "A36", "yillik": 94000.0, "tl": false, "ytd": 63.9, "fy": 93.07, "son": 81.15, "start": "2024-12-01", "end": "2027-11-30", "years": [94000.0, 94000.0, 94000.0, null, null], "toplam": 282000.0, "not": "", "daysToEnd": 475, "dataError": false, "expired": false}, {"contract": "7083000453", "musteri": "A37", "yillik": 120000.0, "tl": false, "ytd": 30.71, "fy": 22.85, "son": 23.94, "start": "2024-01-01", "end": "2026-12-31", "years": [120000.0, 120000.0, 120000.0, null, null], "toplam": 360000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000416", "musteri": "A38", "yillik": 68000.0, "tl": false, "ytd": 10.28, "fy": -110.6, "son": 4.12, "start": "2026-01-01", "end": "2027-12-31", "years": [68000.0, 68000.0, null, null, null], "toplam": 136000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000528", "musteri": "A39", "yillik": 47600.0, "tl": false, "ytd": 82.55, "fy": 69.52, "son": 84.15, "start": "2025-04-01", "end": "2027-03-31", "years": [47600.0, 47600.0, null, null, null], "toplam": 95200.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000393", "musteri": "A40", "yillik": 28400.0, "tl": false, "ytd": 63.67, "fy": 67.75, "son": 25.84, "start": "2024-03-01", "end": "2025-02-28", "years": [28400.0, null, null, null, null], "toplam": 28400.0, "not": "", "daysToEnd": -530, "dataError": false, "expired": true}, {"contract": "7083000393", "musteri": "A41", "yillik": 26500.0, "tl": false, "ytd": 63.67, "fy": 67.75, "son": 25.84, "start": "2024-03-01", "end": "2025-02-28", "years": [26500.0, null, null, null, null], "toplam": 26500.0, "not": "", "daysToEnd": -530, "dataError": false, "expired": true}, {"contract": "7083000393", "musteri": "A42", "yillik": 14300.0, "tl": false, "ytd": 63.67, "fy": 67.75, "son": 88.89, "start": "2025-02-01", "end": "2026-02-28", "years": [14300.0, null, null, null, null], "toplam": 14300.0, "not": "", "daysToEnd": -165, "dataError": false, "expired": true}, {"contract": "7083000429", "musteri": "A43", "yillik": 22400.0, "tl": false, "ytd": 61.94, "fy": 35.07, "son": 61.32, "start": "2024-04-05", "end": "2027-04-04", "years": [22400.0, 22400.0, 22400.0, null, null], "toplam": 67200.0, "not": "", "daysToEnd": 235, "dataError": false, "expired": false}, {"contract": "7083000481", "musteri": "A44", "yillik": 23000.0, "tl": false, "ytd": 92.74, "fy": 100.0, "son": 100.0, "start": "2025-10-21", "end": "2026-10-20", "years": [23000.0, null, null, null, null], "toplam": 23000.0, "not": "", "daysToEnd": 69, "dataError": false, "expired": false}, {"contract": "7083000529", "musteri": "A45", "yillik": 27000.0, "tl": false, "ytd": 93.3, "fy": 81.03, "son": 91.62, "start": "2026-01-16", "end": "2027-04-15", "years": [27000.0, null, null, null, null], "toplam": 27000.0, "not": "", "daysToEnd": 246, "dataError": false, "expired": false}, {"contract": "7083000477", "musteri": "A46", "yillik": 21000.0, "tl": false, "ytd": 92.36, "fy": 90.03, "son": 93.32, "start": "2024-11-06", "end": "2026-11-05", "years": [21000.0, 21000.0, null, null, null], "toplam": 42000.0, "not": "", "daysToEnd": 85, "dataError": false, "expired": false}, {"contract": "7083000524", "musteri": "A47", "yillik": 47000.0, "tl": false, "ytd": 83.03, "fy": 97.48, "son": 77.54, "start": "2024-07-01", "end": "2027-06-30", "years": [47000.0, 47000.0, 47000.0, null, null], "toplam": 141000.0, "not": "", "daysToEnd": 322, "dataError": false, "expired": false}, {"contract": "7083000482", "musteri": "A48", "yillik": 51000.0, "tl": false, "ytd": 70.65, "fy": 96.08, "son": 73.26, "start": "2025-01-01", "end": "2027-12-31", "years": [51000.0, 51000.0, 51000.0, null, null], "toplam": 153000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000562", "musteri": "A49", "yillik": 34500.0, "tl": false, "ytd": 83.85, "fy": 66.47, "son": 66.47, "start": "2025-07-01", "end": "2026-06-30", "years": [34500.0, null, null, null, null], "toplam": 34500.0, "not": "", "daysToEnd": -43, "dataError": false, "expired": true}, {"contract": "7083000526", "musteri": "A50", "yillik": 21000.0, "tl": false, "ytd": 82.3, "fy": 80.0, "son": 100.0, "start": "2026-01-01", "end": "2026-12-31", "years": [21000.0, null, null, null, null], "toplam": 21000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000520", "musteri": "A51", "yillik": 93500.0, "tl": false, "ytd": 70.4, "fy": 77.93, "son": 77.04, "start": "2025-01-01", "end": "2026-12-31", "years": [93500.0, 93500.0, null, null, null], "toplam": 187000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000189", "musteri": "A52", "yillik": 185400.0, "tl": false, "ytd": 62.61, "fy": 85.23, "son": 80.55, "start": "2025-01-01", "end": "2025-12-31", "years": [185400.0, null, null, null, null], "toplam": 185400.0, "not": "", "daysToEnd": -224, "dataError": false, "expired": true}, {"contract": "7083000525", "musteri": "A53", "yillik": 16500.0, "tl": false, "ytd": 63.01, "fy": 60.54, "son": 58.2, "start": "2026-01-01", "end": "2027-12-31", "years": [16500.0, null, null, null, null], "toplam": 16500.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000126", "musteri": "A54", "yillik": 235000.0, "tl": false, "ytd": 53.39, "fy": 66.6, "son": 61.89, "start": "2026-01-01", "end": "2027-12-31", "years": [235000.0, 235000.0, null, null, null], "toplam": 470000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000478", "musteri": "A55", "yillik": 31000.0, "tl": false, "ytd": 77.11, "fy": 94.46, "son": 81.8, "start": "2025-01-01", "end": "2027-12-31", "years": [31000.0, 31000.0, 31000.0, null, null], "toplam": 93000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000176", "musteri": "A56", "yillik": 159500.0, "tl": false, "ytd": 77.81, "fy": 87.98, "son": 77.89, "start": "2024-01-01", "end": "2026-12-31", "years": [159500.0, 159500.0, 159500.0, null, null], "toplam": 478500.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000451", "musteri": "A57", "yillik": 85000.0, "tl": false, "ytd": 83.01, "fy": 70.33, "son": 91.17, "start": "2026-01-01", "end": "2030-12-31", "years": [85000.0, 85000.0, 85000.0, 85000.0, 85000.0], "toplam": 425000.0, "not": "", "daysToEnd": 1602, "dataError": false, "expired": false}, {"contract": "7083000543", "musteri": "A58", "yillik": 64000.0, "tl": false, "ytd": 86.0, "fy": 92.55, "son": 88.79, "start": "2026-01-01", "end": "2026-12-31", "years": [64000.0, null, null, null, null], "toplam": 64000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000230", "musteri": "A59", "yillik": 54700.0, "tl": false, "ytd": 71.17, "fy": 93.55, "son": 93.83, "start": "2026-01-01", "end": "2028-12-31", "years": [54700.0, 54700.0, 54700.0, null, null], "toplam": 164100.0, "not": "", "daysToEnd": 872, "dataError": false, "expired": false}, {"contract": "7083000546", "musteri": "A60", "yillik": 20000.0, "tl": false, "ytd": 84.11, "fy": 83.34, "son": 83.08, "start": "2024-10-01", "end": "2027-09-30", "years": [20000.0, 35000.0, 35000.0, null, null], "toplam": 90000.0, "not": "", "daysToEnd": 414, "dataError": false, "expired": false}, {"contract": "7083000546", "musteri": "A61", "yillik": 29600.0, "tl": false, "ytd": 84.11, "fy": 83.34, "son": 84.94, "start": "2024-03-01", "end": "2027-02-28", "years": [29600.0, 29600.0, 29600.0, null, null], "toplam": 88800.0, "not": "", "daysToEnd": 200, "dataError": false, "expired": false}, {"contract": "7083000233", "musteri": "A62", "yillik": 77600.0, "tl": false, "ytd": 74.73, "fy": 90.01, "son": 100.0, "start": "2026-05-01", "end": "2027-04-30", "years": [77600.0, null, null, null, null], "toplam": 77600.0, "not": "", "daysToEnd": 261, "dataError": false, "expired": false}, {"contract": "7083000127", "musteri": "A63", "yillik": 13600.0, "tl": false, "ytd": 37.35, "fy": 28.78, "son": 23.8, "start": "2026-02-15", "end": "2027-02-14", "years": [13600.0, null, null, null, null], "toplam": 13600.0, "not": "", "daysToEnd": 186, "dataError": false, "expired": false}, {"contract": "7083000436", "musteri": "A64", "yillik": 58000.0, "tl": false, "ytd": 23.72, "fy": 53.44, "son": 35.82, "start": "2024-06-01", "end": "2027-05-31", "years": [58000.0, 60000.0, 60000.0, null, null], "toplam": 178000.0, "not": "", "daysToEnd": 292, "dataError": false, "expired": false}, {"contract": "7083000436", "musteri": "A65", "yillik": 7200.0, "tl": false, "ytd": 23.72, "fy": 53.44, "son": 28.81, "start": "2023-06-01", "end": "2026-05-31", "years": [7200.0, 7200.0, 7200.0, null, null], "toplam": 21600.0, "not": "", "daysToEnd": -73, "dataError": false, "expired": true}, {"contract": "7083000487", "musteri": "A66", "yillik": 10000.0, "tl": false, "ytd": 89.81, "fy": 100.0, "son": 93.52, "start": "2024-01-01", "end": "2026-12-31", "years": [10000.0, 10000.0, 10000.0, null, null], "toplam": 30000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000563", "musteri": "A67", "yillik": 17300.0, "tl": false, "ytd": 42.13, "fy": 42.13, "son": 49.77, "start": "2025-12-01", "end": "2026-11-30", "years": [17300.0, null, null, null, null], "toplam": 17300.0, "not": "", "daysToEnd": 110, "dataError": false, "expired": false}, {"contract": "7083000472", "musteri": "A68", "yillik": 43500.0, "tl": false, "ytd": -25.06, "fy": null, "son": 27.59, "start": "2024-01-25", "end": "2025-01-24", "years": [43500.0, null, null, null, null], "toplam": 43500.0, "not": "", "daysToEnd": -565, "dataError": false, "expired": true}, {"contract": "7083000565", "musteri": "A69", "yillik": 117000.0, "tl": false, "ytd": 94.48, "fy": 94.48, "son": 95.21, "start": "2025-12-01", "end": "2026-11-30", "years": [117000.0, null, null, null, null], "toplam": 117000.0, "not": "", "daysToEnd": 110, "dataError": false, "expired": false}, {"contract": "7083000450", "musteri": "A70", "yillik": 14860.0, "tl": false, "ytd": 94.64, "fy": 85.36, "son": 93.31, "start": "2024-04-01", "end": "2027-03-31", "years": [14860.0, 14860.0, 14860.0, null, null], "toplam": 44580.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000427", "musteri": "A71", "yillik": 39400.0, "tl": false, "ytd": 73.24, "fy": 75.5, "son": 77.13, "start": "2025-01-01", "end": "2027-12-31", "years": [39400.0, 39400.0, 39400.0, null, null], "toplam": 118200.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000131", "musteri": "A72", "yillik": 23000.0, "tl": false, "ytd": 82.67, "fy": 79.8, "son": 90.54, "start": "2024-04-01", "end": "2027-03-31", "years": [23000.0, 23000.0, 23000.0, null, null], "toplam": 69000.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000435", "musteri": "A73", "yillik": 29000.0, "tl": false, "ytd": -6.84, "fy": -48.35, "son": -35.06, "start": "2024-01-01", "end": "2026-12-31", "years": [29000.0, 29000.0, 29000.0, null, null], "toplam": 87000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000380", "musteri": "A74", "yillik": 69000.0, "tl": false, "ytd": 59.51, "fy": 88.72, "son": 64.27, "start": "2025-01-01", "end": "2027-12-31", "years": [69000.0, 69000.0, 69000.0, null, null], "toplam": 207000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000326", "musteri": "A75", "yillik": 12000.0, "tl": false, "ytd": 42.41, "fy": 93.12, "son": 70.09, "start": "2025-01-01", "end": "2027-12-31", "years": [12000.0, 12000.0, 12000.0, null, null], "toplam": 36000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000423", "musteri": "A76", "yillik": 14000.0, "tl": false, "ytd": 90.6, "fy": 98.45, "son": 88.86, "start": "2023-08-01", "end": "2026-07-31", "years": [14000.0, 14000.0, 14000.0, null, null], "toplam": 42000.0, "not": "", "daysToEnd": -12, "dataError": false, "expired": true}, {"contract": "7083000441", "musteri": "A77", "yillik": 29000.0, "tl": false, "ytd": 62.64, "fy": 100.0, "son": 100.0, "start": "2026-03-01", "end": "2027-02-28", "years": [29000.0, null, null, null, null], "toplam": 29000.0, "not": "", "daysToEnd": 200, "dataError": false, "expired": false}, {"contract": "7083000548", "musteri": "A78", "yillik": 8900.0, "tl": false, "ytd": 63.59, "fy": 51.62, "son": 62.47, "start": "2024-10-01", "end": "2025-09-30", "years": [8900.0, null, null, null, null], "toplam": 8900.0, "not": "", "daysToEnd": -316, "dataError": false, "expired": true}, {"contract": "7083000307", "musteri": "A79", "yillik": 48000.0, "tl": false, "ytd": 74.61, "fy": 90.09, "son": 94.08, "start": "2026-01-01", "end": "2026-12-31", "years": [48000.0, null, null, null, null], "toplam": 48000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000509", "musteri": "A80", "yillik": 15500.0, "tl": false, "ytd": 30.31, "fy": 7.65, "son": -9.87, "start": "2026-06-01", "end": "2028-06-01", "years": [15500.0, 15500.0, null, null, null], "toplam": 31000.0, "not": "", "daysToEnd": 659, "dataError": false, "expired": false}, {"contract": "7083000541", "musteri": "A81", "yillik": 19200.0, "tl": false, "ytd": 73.93, "fy": 98.97, "son": 83.9, "start": "2024-11-01", "end": "2025-11-01", "years": [19200.0, null, null, null, null], "toplam": 19200.0, "not": "", "daysToEnd": -284, "dataError": false, "expired": true}, {"contract": "7083000446", "musteri": "A82", "yillik": 70000.0, "tl": false, "ytd": 61.22, "fy": -23.82, "son": 57.16, "start": "2023-01-01", "end": "2023-12-14", "years": [70000.0, null, null, null, null], "toplam": 70000.0, "not": "", "daysToEnd": -972, "dataError": false, "expired": true}, {"contract": "7083000523", "musteri": "A83", "yillik": 17000.0, "tl": false, "ytd": -43.39, "fy": -19.51, "son": -58.2, "start": "2024-04-01", "end": "2027-03-31", "years": [17000.0, 17000.0, 17000.0, null, null], "toplam": 51000.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000494", "musteri": "A84", "yillik": 31800.0, "tl": false, "ytd": 96.49, "fy": 98.53, "son": 70.15, "start": "2025-04-15", "end": "2028-04-14", "years": [31800.0, 31800.0, 31800.0, null, null], "toplam": 95400.0, "not": "", "daysToEnd": 611, "dataError": false, "expired": false}, {"contract": "7083000480", "musteri": "A85", "yillik": 18600.0, "tl": false, "ytd": 41.15, "fy": 61.46, "son": 79.88, "start": "2025-04-15", "end": "2028-04-14", "years": [18600.0, 18600.0, 18600.0, null, null], "toplam": 55800.0, "not": "", "daysToEnd": 611, "dataError": false, "expired": false}, {"contract": "7083000343", "musteri": "A86", "yillik": 24950.0, "tl": false, "ytd": 79.68, "fy": 100.0, "son": 73.47, "start": "2024-01-01", "end": "2026-12-31", "years": [24950.0, 24950.0, 24950.0, null, null], "toplam": 74850.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000447", "musteri": "A87", "yillik": 217600.0, "tl": false, "ytd": 44.21, "fy": 36.73, "son": 79.74, "start": "2026-04-01", "end": "2027-03-31", "years": [217600.0, null, null, null, null], "toplam": 217600.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000439", "musteri": "A88", "yillik": 72000.0, "tl": false, "ytd": 53.51, "fy": 23.72, "son": 56.76, "start": "2026-04-01", "end": "2027-03-31", "years": [72000.0, null, null, null, null], "toplam": 72000.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000433", "musteri": "A89", "yillik": 45840.0, "tl": false, "ytd": 78.83, "fy": 79.9, "son": 100.0, "start": "2026-04-01", "end": "2027-03-31", "years": [45840.0, null, null, null, null], "toplam": 45840.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000430", "musteri": "A90", "yillik": 74200.0, "tl": false, "ytd": 76.05, "fy": 100.0, "son": 100.0, "start": "2026-04-01", "end": "2027-03-31", "years": [74200.0, null, null, null, null], "toplam": 74200.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000219", "musteri": "A91", "yillik": 11000.0, "tl": false, "ytd": 70.97, "fy": 100.0, "son": 74.33, "start": "2024-04-01", "end": "2027-03-31", "years": [11000.0, 11000.0, 11000.0, null, null], "toplam": 33000.0, "not": "", "daysToEnd": 231, "dataError": false, "expired": false}, {"contract": "7083000414", "musteri": "A92", "yillik": 17500.0, "tl": false, "ytd": 52.54, "fy": 99.92, "son": 42.06, "start": "2025-06-15", "end": "2027-06-15", "years": [17500.0, 17500.0, null, null, null], "toplam": 35000.0, "not": "", "daysToEnd": 307, "dataError": false, "expired": false}, {"contract": "7083000141", "musteri": "A93", "yillik": 600000.0, "tl": false, "ytd": 59.48, "fy": 33.67, "son": 18.67, "start": "2026-02-15", "end": "2027-02-14", "years": [600000.0, null, null, null, null], "toplam": 600000.0, "not": "", "daysToEnd": 186, "dataError": false, "expired": false}, {"contract": "7083000359", "musteri": "A94", "yillik": 300000.0, "tl": false, "ytd": 77.03, "fy": 84.7, "son": 79.48, "start": "2024-06-01", "end": "2027-05-31", "years": [300000.0, 300000.0, 300000.0, null, null], "toplam": 900000.0, "not": "", "daysToEnd": 292, "dataError": false, "expired": false}, {"contract": "7083000411", "musteri": "A95", "yillik": 6500.0, "tl": false, "ytd": 52.72, "fy": 100.0, "son": 44.19, "start": "2023-01-01", "end": "2025-12-31", "years": [6500.0, 6500.0, 6500.0, null, null], "toplam": 19500.0, "not": "", "daysToEnd": -224, "dataError": false, "expired": true}, {"contract": "7083000488", "musteri": "A96", "yillik": 13200.0, "tl": false, "ytd": 80.8, "fy": 75.88, "son": 78.52, "start": "2024-03-15", "end": "2027-03-14", "years": [13200.0, 13200.0, 13200.0, null, null], "toplam": 39600.0, "not": "", "daysToEnd": 214, "dataError": false, "expired": false}, {"contract": "7083000410", "musteri": "A97", "yillik": 23600.0, "tl": false, "ytd": 59.26, "fy": 95.79, "son": 71.35, "start": "2023-01-01", "end": "2025-12-31", "years": [23600.0, 23600.0, 23600.0, null, null], "toplam": 70800.0, "not": "", "daysToEnd": -224, "dataError": false, "expired": true}, {"contract": "7083000554", "musteri": "A98", "yillik": 7500.0, "tl": false, "ytd": 93.62, "fy": 100.0, "son": 94.0, "start": "2024-11-01", "end": "2027-10-31", "years": [7500.0, 7500.0, 7500.0, null, null], "toplam": 22500.0, "not": "", "daysToEnd": 445, "dataError": false, "expired": false}, {"contract": "7083000003", "musteri": "A99", "yillik": 170000.0, "tl": false, "ytd": 53.46, "fy": 67.76, "son": 58.43, "start": "2024-10-01", "end": "2027-09-30", "years": [170000.0, 170000.0, 170000.0, null, null], "toplam": 510000.0, "not": "", "daysToEnd": 414, "dataError": false, "expired": false}, {"contract": "7083000373", "musteri": "A100", "yillik": 52000.0, "tl": false, "ytd": 70.17, "fy": 75.07, "son": 80.75, "start": "2025-07-01", "end": "2026-06-30", "years": [52000.0, null, null, null, null], "toplam": 52000.0, "not": "", "daysToEnd": -43, "dataError": false, "expired": true}, {"contract": "7083000445", "musteri": "A101", "yillik": 38050.0, "tl": false, "ytd": 65.27, "fy": 76.64, "son": 63.77, "start": "2024-01-01", "end": "2026-12-31", "years": [38050.0, 38050.0, 38050.0, null, null], "toplam": 114150.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000467", "musteri": "A102", "yillik": 116000.0, "tl": false, "ytd": 69.02, "fy": 69.0, "son": 66.08, "start": "2024-01-01", "end": "2026-12-31", "years": [116000.0, 116000.0, 116000.0, null, null], "toplam": 348000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000474", "musteri": "A103", "yillik": 18500.0, "tl": false, "ytd": 95.45, "fy": 97.14, "son": 100.0, "start": "2025-01-15", "end": "2026-01-14", "years": [18500.0, null, null, null, null], "toplam": 18500.0, "not": "", "daysToEnd": -210, "dataError": false, "expired": true}, {"contract": "7083000361", "musteri": "A104", "yillik": 38600.0, "tl": false, "ytd": 91.05, "fy": 100.0, "son": 100.0, "start": "2026-01-01", "end": "2027-12-31", "years": [38600.0, 38600.0, null, null, null], "toplam": 77200.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000531", "musteri": "A105", "yillik": 29500.0, "tl": false, "ytd": 56.18, "fy": 32.08, "son": -17.91, "start": "2026-04-15", "end": "2029-04-14", "years": [29500.0, 29500.0, 29500.0, null, null], "toplam": 88500.0, "not": "", "daysToEnd": 976, "dataError": false, "expired": false}, {"contract": "7083000576", "musteri": "A106", "yillik": 32000.0, "tl": false, "ytd": 100.0, "fy": 0.0, "son": 100.0, "start": "2025-06-01", "end": "2027-05-31", "years": [32000.0, 32000.0, null, null, null], "toplam": 64000.0, "not": "", "daysToEnd": 292, "dataError": false, "expired": false}, {"contract": "7083000463", "musteri": "A107", "yillik": 18600.0, "tl": false, "ytd": 90.98, "fy": 98.02, "son": 89.59, "start": "2025-03-01", "end": "2028-02-28", "years": [18600.0, null, null, null, null], "toplam": 18600.0, "not": "", "daysToEnd": 565, "dataError": false, "expired": false}, {"contract": "7083000553", "musteri": "A108", "yillik": 15500.0, "tl": false, "ytd": 83.29, "fy": 100.0, "son": 100.0, "start": "2025-12-01", "end": "2026-11-30", "years": [15500.0, null, null, null, null], "toplam": 15500.0, "not": "", "daysToEnd": 110, "dataError": false, "expired": false}, {"contract": "7083000231", "musteri": "A109", "yillik": 582500.0, "tl": false, "ytd": 63.86, "fy": 80.84, "son": 77.17, "start": "2026-01-01", "end": "2026-12-31", "years": [582500.0, null, null, null, null], "toplam": 582500.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000499", "musteri": "A110", "yillik": 85000.0, "tl": false, "ytd": 39.91, "fy": 81.68, "son": 89.42, "start": "2026-03-16", "end": "2029-03-15", "years": [85000.0, 85000.0, 85000.0, null, null], "toplam": 255000.0, "not": "", "daysToEnd": 946, "dataError": false, "expired": false}, {"contract": "7083000499", "musteri": "A111", "yillik": 257000.0, "tl": false, "ytd": 39.91, "fy": 81.68, "son": 89.42, "start": "2026-03-16", "end": "2029-03-15", "years": [257000.0, 257000.0, 257000.0, null, null], "toplam": 771000.0, "not": "", "daysToEnd": 946, "dataError": false, "expired": false}, {"contract": "7083000499", "musteri": "A112", "yillik": 116000.0, "tl": false, "ytd": 39.91, "fy": 81.68, "son": 98.96, "start": "2026-06-29", "end": "2029-06-28", "years": [116000.0, 116000.0, 116000.0, null, null], "toplam": 348000.0, "not": "", "daysToEnd": 1051, "dataError": false, "expired": false}, {"contract": "7083000492", "musteri": "A113", "yillik": 297000.0, "tl": false, "ytd": 69.52, "fy": 76.7, "son": 82.11, "start": "2025-01-01", "end": "2027-12-31", "years": [297000.0, 297000.0, 297000.0, null, null], "toplam": 891000.0, "not": "", "daysToEnd": 506, "dataError": false, "expired": false}, {"contract": "7083000495", "musteri": "A114", "yillik": 144000.0, "tl": false, "ytd": 61.82, "fy": 71.14, "son": 61.6, "start": "2022-05-30", "end": "2027-05-29", "years": [144000.0, null, null, null, null], "toplam": 144000.0, "not": "", "daysToEnd": 290, "dataError": false, "expired": false}, {"contract": "7083000500", "musteri": "A115", "yillik": 63000.0, "tl": false, "ytd": 92.27, "fy": 92.18, "son": 93.22, "start": "2024-10-01", "end": "2025-09-30", "years": [63000.0, null, null, null, null], "toplam": 63000.0, "not": "", "daysToEnd": -316, "dataError": false, "expired": true}, {"contract": "7083000497", "musteri": "A116", "yillik": 42300.0, "tl": false, "ytd": -186.85, "fy": 99.55, "son": 96.38, "start": "2025-08-01", "end": "2028-07-31", "years": [42300.0, 42300.0, 42300.0, null, null], "toplam": 126900.0, "not": "", "daysToEnd": 719, "dataError": false, "expired": false}, {"contract": "7083000496", "musteri": "A117", "yillik": 24300.0, "tl": false, "ytd": 60.13, "fy": 4.21, "son": 60.3, "start": "2024-11-01", "end": "2026-10-31", "years": [24300.0, 24300.0, null, null, null], "toplam": 48600.0, "not": "", "daysToEnd": 80, "dataError": false, "expired": false}, {"contract": "7083000498", "musteri": "A118", "yillik": 10125.0, "tl": false, "ytd": 71.77, "fy": 51.52, "son": 81.81, "start": "2022-09-01", "end": "2025-08-31", "years": [10125.0, 10125.0, 10125.0, null, null], "toplam": 30375.0, "not": "", "daysToEnd": -346, "dataError": false, "expired": true}, {"contract": "7083000507", "musteri": "A119", "yillik": 8700.0, "tl": false, "ytd": 91.92, "fy": 100.0, "son": 84.68, "start": "2024-11-01", "end": "2025-10-31", "years": [8700.0, null, null, null, null], "toplam": 8700.0, "not": "", "daysToEnd": -285, "dataError": false, "expired": true}, {"contract": "7083000569", "musteri": "A120", "yillik": 130000.0, "tl": false, "ytd": 95.75, "fy": 93.64, "son": 95.75, "start": "2026-01-01", "end": "2028-12-31", "years": [130000.0, 130000.0, 130000.0, null, null], "toplam": 390000.0, "not": "", "daysToEnd": 872, "dataError": false, "expired": false}, {"contract": "7083000556", "musteri": "A121", "yillik": 25600.0, "tl": false, "ytd": 31.42, "fy": 24.35, "son": 31.42, "start": "2025-05-01", "end": "2028-04-30", "years": [25600.0, 25600.0, 25600.0, null, null], "toplam": 76800.0, "not": "", "daysToEnd": 627, "dataError": false, "expired": false}, {"contract": "7083000564", "musteri": "A122", "yillik": 13800.0, "tl": false, "ytd": 100.0, "fy": 100.0, "son": 100.0, "start": "2025-12-01", "end": "2026-11-30", "years": [13800.0, null, null, null, null], "toplam": 13800.0, "not": "", "daysToEnd": 110, "dataError": false, "expired": false}, {"contract": "7083000504", "musteri": "A123", "yillik": 133000.0, "tl": false, "ytd": 90.8, "fy": 90.19, "son": 89.15, "start": "2024-11-21", "end": "2027-11-20", "years": [133000.0, 133000.0, 133000.0, null, null], "toplam": 399000.0, "not": "", "daysToEnd": 465, "dataError": false, "expired": false}, {"contract": "7083000505", "musteri": "A124", "yillik": 63000.0, "tl": false, "ytd": 96.74, "fy": 94.33, "son": 97.66, "start": "2024-11-21", "end": "2027-11-20", "years": [63000.0, 63000.0, 63000.0, null, null], "toplam": 189000.0, "not": "", "daysToEnd": 465, "dataError": false, "expired": false}, {"contract": "7083000506", "musteri": "A125", "yillik": 4000.0, "tl": false, "ytd": 57.85, "fy": 3.0, "son": 43.02, "start": "2024-11-21", "end": "2027-11-20", "years": [4000.0, 4000.0, 4000.0, null, null], "toplam": 12000.0, "not": "", "daysToEnd": 465, "dataError": false, "expired": false}, {"contract": "7083000149", "musteri": "A126", "yillik": 350000.0, "tl": false, "ytd": 49.39, "fy": 85.02, "son": 82.86, "start": "2025-03-26", "end": "2028-03-25", "years": [350000.0, 370000.0, 390000.0, null, null], "toplam": 1110000.0, "not": "", "daysToEnd": 591, "dataError": false, "expired": false}, {"contract": "7083000568", "musteri": "A127", "yillik": 21600.0, "tl": false, "ytd": -33.36, "fy": -33.36, "son": 0.24, "start": "2026-02-01", "end": "2029-01-31", "years": [21600.0, 21600.0, 21600.0, null, null], "toplam": 64800.0, "not": "", "daysToEnd": 903, "dataError": false, "expired": false}, {"contract": "7083000252", "musteri": "A128", "yillik": 75000.0, "tl": false, "ytd": 71.04, "fy": 92.85, "son": 82.36, "start": "2024-06-01", "end": "2027-05-31", "years": [75000.0, 75000.0, 75000.0, null, null], "toplam": 225000.0, "not": "", "daysToEnd": 292, "dataError": false, "expired": false}, {"contract": "7083000316", "musteri": "A129", "yillik": 220000.0, "tl": false, "ytd": 63.49, "fy": 59.56, "son": 58.53, "start": "2025-01-01", "end": "2029-12-31", "years": [220000.0, 220000.0, 220000.0, 220000.0, 220000.0], "toplam": 1100000.0, "not": "", "daysToEnd": 1237, "dataError": false, "expired": false}, {"contract": "7083000391", "musteri": "A130", "yillik": 14200.0, "tl": false, "ytd": 81.63, "fy": 100.0, "son": 79.87, "start": "2025-09-01", "end": "2028-08-31", "years": [14200.0, 14200.0, 14200.0, null, null], "toplam": 42600.0, "not": "", "daysToEnd": 750, "dataError": false, "expired": false}, {"contract": "7083000108", "musteri": "A131", "yillik": 25500.0, "tl": false, "ytd": 56.7, "fy": 90.12, "son": 70.76, "start": "2025-01-01", "end": "2025-12-31", "years": [25500.0, null, null, null, null], "toplam": 25500.0, "not": "", "daysToEnd": -224, "dataError": false, "expired": true}, {"contract": "7083000409", "musteri": "A132", "yillik": 60000.0, "tl": false, "ytd": 75.53, "fy": 77.39, "son": 74.64, "start": "2023-05-15", "end": "2028-05-14", "years": [60000.0, 60000.0, 60000.0, null, null], "toplam": 180000.0, "not": "", "daysToEnd": 641, "dataError": false, "expired": false}, {"contract": "7083000468", "musteri": "A133", "yillik": 12000.0, "tl": false, "ytd": 65.86, "fy": 93.85, "son": 72.97, "start": "2023-09-07", "end": "2026-09-06", "years": [12000.0, 12000.0, 12000.0, null, null], "toplam": 36000.0, "not": "", "daysToEnd": 25, "dataError": false, "expired": false}, {"contract": "7083000470", "musteri": "A134", "yillik": 8200.0, "tl": false, "ytd": 62.49, "fy": 65.91, "son": 61.44, "start": "2025-05-01", "end": "2027-04-30", "years": [8200.0, 8200.0, null, null, null], "toplam": 16400.0, "not": "", "daysToEnd": 261, "dataError": false, "expired": false}, {"contract": "7083000464", "musteri": "A135", "yillik": 19500.0, "tl": false, "ytd": 88.29, "fy": 79.53, "son": 81.05, "start": "2025-08-01", "end": "2027-07-31", "years": [19500.0, 19500.0, null, null, null], "toplam": 39000.0, "not": "", "daysToEnd": 353, "dataError": false, "expired": false}, {"contract": "7083000532", "musteri": "A136", "yillik": 47000.0, "tl": false, "ytd": 71.64, "fy": 82.21, "son": 82.81, "start": "2025-05-01", "end": "2027-04-30", "years": [47000.0, 47000.0, null, null, null], "toplam": 94000.0, "not": "", "daysToEnd": 261, "dataError": false, "expired": false}, {"contract": "7083000434", "musteri": "A137", "yillik": 60000.0, "tl": false, "ytd": 60.03, "fy": 66.88, "son": 65.66, "start": "2024-11-01", "end": "2026-10-31", "years": [60000.0, 60000.0, null, null, null], "toplam": 120000.0, "not": "", "daysToEnd": 80, "dataError": false, "expired": false}, {"contract": "7083000490", "musteri": "A138", "yillik": 16000.0, "tl": false, "ytd": 65.42, "fy": 99.3, "son": 96.77, "start": "2026-01-01", "end": "2026-12-31", "years": [16000.0, null, null, null, null], "toplam": 16000.0, "not": "", "daysToEnd": 141, "dataError": false, "expired": false}, {"contract": "7083000515", "musteri": "A139", "yillik": 120000.0, "tl": false, "ytd": 74.94, "fy": 60.78, "son": 74.94, "start": "2022-05-10", "end": "2027-05-10", "years": [120000.0, 120000.0, 120000.0, 120000.0, 120000.0], "toplam": 600000.0, "not": "", "daysToEnd": 271, "dataError": false, "expired": false}, {"contract": "7083000516", "musteri": "A140", "yillik": 95000.0, "tl": false, "ytd": 77.63, "fy": 73.71, "son": 77.63, "start": "2022-05-10", "end": "2027-05-10", "years": [95000.0, 95000.0, 95000.0, 95000.0, 95000.0], "toplam": 475000.0, "not": "", "daysToEnd": 271, "dataError": false, "expired": false}, {"contract": "7083000514", "musteri": "A141", "yillik": 72900.0, "tl": false, "ytd": 47.2, "fy": 48.68, "son": 75.96, "start": "2025-02-07", "end": "2028-02-06", "years": [72900.0, 72900.0, 72900.0, null, null], "toplam": 218700.0, "not": "", "daysToEnd": 543, "dataError": false, "expired": false}, {"contract": "7083000559", "musteri": "A142", "yillik": 9500.0, "tl": false, "ytd": 55.89, "fy": 15.4, "son": 21.23, "start": "2025-02-07", "end": "2028-02-06", "years": [9500.0, 9500.0, 9500.0, null, null], "toplam": 28500.0, "not": "", "daysToEnd": 543, "dataError": false, "expired": false}, {"contract": "7083000567", "musteri": "A143", "yillik": 1200000.0, "tl": true, "ytd": 78.82, "fy": 57.64, "son": 63.69, "start": "2026-01-07", "end": "2027-01-06", "years": [1200000.0, null, null, null, null], "toplam": 1200000.0, "not": "", "daysToEnd": 147, "dataError": false, "expired": false}, {"contract": "7083000339", "musteri": "A144", "yillik": 23400.0, "tl": false, "ytd": 47.54, "fy": 73.71, "son": 65.8, "start": "2025-08-04", "end": "2026-08-03", "years": [23400.0, null, null, null, null], "toplam": 23400.0, "not": "", "daysToEnd": -9, "dataError": false, "expired": true}, {"contract": "7083000521", "musteri": "A145", "yillik": 46000.0, "tl": false, "ytd": 66.51, "fy": 95.78, "son": 96.71, "start": "2025-02-10", "end": "2028-02-09", "years": [46000.0, 46000.0, 46000.0, null, null], "toplam": 138000.0, "not": "", "daysToEnd": 546, "dataError": false, "expired": false}, {"contract": "7083000566", "musteri": "A146", "yillik": 54000.0, "tl": false, "ytd": 68.5, "fy": 35.04, "son": 44.81, "start": "2026-01-01", "end": "2028-12-31", "years": [54000.0, 54000.0, 54000.0, null, null], "toplam": 162000.0, "not": "", "daysToEnd": 872, "dataError": false, "expired": false}, {"contract": "7083000572", "musteri": "A147", "yillik": 232500.0, "tl": false, "ytd": 98.66, "fy": 98.48, "son": 97.17, "start": "2026-01-01", "end": "2028-12-31", "years": [232500.0, null, null, null, null], "toplam": 232500.0, "not": "", "daysToEnd": 872, "dataError": false, "expired": false}, {"contract": "7083000571", "musteri": "A148", "yillik": 187800.0, "tl": false, "ytd": 83.58, "fy": 81.61, "son": 83.58, "start": "2026-01-01", "end": "2028-12-31", "years": [187800.0, 187800.0, 187800.0, null, null], "toplam": 563400.0, "not": "", "daysToEnd": 872, "dataError": false, "expired": false}];
+const TODAY = new Date(2026, 7, 12);
+
+// ---------- state ----------
+const state = { min: 0, smMax: 999, win: 'all', expired: false, err: false };
+
+// ---------- helpers ----------
+const fmtEur = v => '€ ' + Math.round(v).toLocaleString('tr-TR');
+const fmtEurK = v => v >= 1e6 ? '€ ' + (v/1e6).toFixed(2) + 'M' : '€ ' + Math.round(v/1000) + 'k';
+const fmtDate = iso => { if(!iso) return '–'; const [y,m,d] = iso.split('-'); return `${d}.${m}.${y}`; };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function fxRate(){ return parseFloat(document.getElementById('fxRate').value) || 48; }
+
+function enrich(){
+  const fx = fxRate();
+  return RAW.map(r => {
+    const yillikEur = r.tl ? r.yillik / fx : r.yillik;
+    const toplamEur = r.tl ? r.toplam / fx : r.toplam;
+    let health, hcolor;
+    if (r.dataError) { health = 'Veri hatası'; hcolor = css('--err'); }
+    else if (r.expired) { health = 'Süresi dolmuş'; hcolor = css('--exp'); }
+    else if (r.son === null) { health = 'Veri yok'; hcolor = css('--exp'); }
+    else if (r.son < 25) { health = 'Kritik'; hcolor = css('--crit'); }
+    else if (r.son < 60) { health = 'İzleme'; hcolor = css('--warn'); }
+    else { health = 'Sağlıklı'; hcolor = css('--ok'); }
+    const trend = (r.ytd !== null && r.son !== null) ? r.ytd - r.son : null;
+    return {...r, yillikEur, toplamEur, health, hcolor, trend};
+  });
+}
+
+function filtered(){
+  return enrich().filter(r => {
+    if (r.yillikEur < state.min) return false;
+    if (state.smMax !== 999 && !(r.son !== null && r.son < state.smMax)) return false;
+    if (!state.expired && r.expired) return false;
+    if (!state.err && r.dataError) return false;
+    if (state.win !== 'all') {
+      const lim = {'3':92,'6':183,'12':365}[state.win];
+      if (r.dataError || r.daysToEnd === null || r.daysToEnd < 0 || r.daysToEnd > lim) return false;
+    }
+    return true;
+  });
+}
+
+// ---------- KPIs ----------
+function renderKPIs(rows){
+  const all = enrich();
+  document.getElementById('kCount').textContent = rows.length;
+  document.getElementById('kCountH').textContent = `toplam ${all.length} kayıttan`;
+  const rev = rows.reduce((s,r)=>s+r.yillikEur,0);
+  document.getElementById('kRev').textContent = fmtEurK(rev);
+  const wRows = rows.filter(r=>r.son!==null);
+  const wSum = wRows.reduce((s,r)=>s+r.yillikEur,0);
+  const wSM = wSum ? wRows.reduce((s,r)=>s+r.yillikEur*r.son,0)/wSum : 0;
+  document.getElementById('kSM').textContent = '%' + wSM.toFixed(1);
+  const exp6 = rows.filter(r=>!r.expired && !r.dataError && r.daysToEnd!==null && r.daysToEnd>=0 && r.daysToEnd<=183);
+  document.getElementById('kExp6').textContent = fmtEurK(exp6.reduce((s,r)=>s+r.yillikEur,0));
+  document.getElementById('kExp6H').textContent = exp6.length + ' sözleşme';
+  const crit = rows.filter(r=>!r.expired && !r.dataError && r.son!==null && r.son<25);
+  document.getElementById('kCrit').textContent = crit.length;
+  document.getElementById('kCritH').textContent = fmtEurK(crit.reduce((s,r)=>s+r.yillikEur,0)) + ' ciro';
+}
+
+// ---------- Renewal horizon ----------
+const tip = document.getElementById('tip');
+function showTip(e, html){ tip.innerHTML = html; tip.style.display='block'; moveTip(e); }
+function moveTip(e){ tip.style.left = Math.min(e.clientX+14, window.innerWidth-280)+'px'; tip.style.top = (e.clientY+14)+'px'; }
+function hideTip(){ tip.style.display='none'; }
+
+function renderHorizon(rows){
+  const box = document.getElementById('horizon');
+  box.innerHTML = '';
+  const W = box.clientWidth;
+  const start = new Date(2026, 7, 1); // Ağu 2026
+  const months = 24;
+  const msSpan = new Date(2028, 7, 1) - start;
+  const x = d => ((d - start) / msSpan) * W;
+  // axis
+  const ax = document.createElement('div'); ax.className='h-axis'; box.appendChild(ax);
+  const mNames = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+  for(let i=0;i<=months;i+=2){
+    const d = new Date(2026, 7+i, 1);
+    const px = x(d); if (px<0||px>W) continue;
+    const t = document.createElement('div'); t.className='h-tick'; t.style.left=px+'px'; box.appendChild(t);
+    const lbl = document.createElement('div'); lbl.className='h-month'; lbl.style.left=px+'px';
+    lbl.textContent = mNames[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2); box.appendChild(lbl);
+  }
+  // now line
+  const now = document.createElement('div'); now.className='h-now'; now.style.left=x(TODAY)+'px';
+  now.innerHTML='<span>bugün</span>'; box.appendChild(now);
+  // dots — active contracts ending within window; jitter rows vertically to reduce overlap
+  const active = rows.filter(r=>!r.expired && !r.dataError && r.end);
+  const maxV = Math.max(...active.map(r=>r.yillikEur), 1);
+  active.forEach((r,i) => {
+    const d = new Date(r.end);
+    const px = x(d); if (px < -10 || px > W+10) return;
+    const size = 8 + 26 * Math.sqrt(r.yillikEur/maxV);
+    const dot = document.createElement('div'); dot.className='h-dot';
+    dot.style.left=px+'px';
+    dot.style.top=(14 + (i % 5) * 13)+'px';
+    dot.style.width=size+'px'; dot.style.height=size+'px';
+    dot.style.background=r.hcolor;
+    dot.addEventListener('mousemove', e=>{ moveTip(e); });
+    dot.addEventListener('mouseenter', e=>showTip(e,
+      `<b>${r.musteri}</b> · ${r.contract}${r.tl?' <span style="color:var(--warn)">TL→EUR</span>':''}<br>
+       Yıllık: <b>${fmtEur(r.yillikEur)}</b><br>
+       Son dönem SM%: <b>${r.son===null?'–':'%'+r.son.toFixed(1)}</b><br>
+       Bitiş: ${fmtDate(r.end)} (${r.daysToEnd} gün)`));
+    dot.addEventListener('mouseleave', hideTip);
+    box.appendChild(dot);
+  });
+}
+
+// ---------- Charts ----------
+let chPareto, chScatter, chPipe, chDist;
+Chart.defaults.color = css('--muted');
+Chart.defaults.borderColor = css('--line');
+Chart.defaults.font.family = css('--sans') || 'IBM Plex Sans';
+
+function renderPareto(rows){
+  const sorted = [...rows].sort((a,b)=>b.yillikEur-a.yillikEur);
+  const top = sorted.slice(0,25);
+  const total = sorted.reduce((s,r)=>s+r.yillikEur,0);
+  let cum = 0;
+  const cumPct = top.map(r=>{ cum += r.yillikEur; return +(cum/total*100).toFixed(1); });
+  // note: pareto share of top 20%
+  const n20 = Math.max(1, Math.ceil(sorted.length*0.2));
+  const share20 = total ? sorted.slice(0,n20).reduce((s,r)=>s+r.yillikEur,0)/total*100 : 0;
+  document.getElementById('paretoNote').textContent =
+    `Filtreli sette müşterilerin %20'si (${n20} sözleşme) cironun %${share20.toFixed(0)}'ini taşıyor. İlk 25 gösteriliyor.`;
+  const cfg = {
+    data:{ labels: top.map(r=>r.musteri),
+      datasets:[
+        {type:'bar', label:'Yıllık bedel', data: top.map(r=>Math.round(r.yillikEur)), backgroundColor: top.map(r=>r.hcolor), yAxisID:'y', borderRadius:3},
+        {type:'line', label:'Kümülatif %', data: cumPct, yAxisID:'y2', borderColor: css('--accent'), pointRadius:2, tension:.3}
+      ]},
+    options:{ maintainAspectRatio:false,
+      scales:{ y:{ticks:{callback:v=>fmtEurK(v)}}, y2:{position:'right', min:0, max:100, grid:{display:false}, ticks:{callback:v=>v+'%'}}, x:{ticks:{font:{size:10}}} },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=> c.dataset.type==='bar' ? fmtEur(c.raw) : 'Kümülatif %'+c.raw }} } }
+  };
+  if (chPareto) { chPareto.data = cfg.data; chPareto.options = cfg.options; chPareto.update(); }
+  else chPareto = new Chart(document.getElementById('chPareto'), cfg);
+}
+
+function renderScatter(rows){
+  const pts = rows.filter(r=>r.son!==null);
+  const maxT = Math.max(...pts.map(r=>r.toplamEur||r.yillikEur), 1);
+  const cfg = {
+    type:'bubble',
+    data:{ datasets:[{ data: pts.map(r=>({x:r.yillikEur, y:r.son, r: 4+14*Math.sqrt((r.toplamEur||r.yillikEur)/maxT), _r:r})),
+      backgroundColor: pts.map(r=>r.hcolor+'CC'), borderColor: pts.map(r=>r.hcolor) }]},
+    options:{ maintainAspectRatio:false,
+      scales:{ x:{type:'logarithmic', title:{display:true,text:'Yıllık bedel (€, log)'}, ticks:{callback:v=>[5000,10000,25000,50000,100000,250000,600000].includes(v)?fmtEurK(v):null}},
+               y:{title:{display:true,text:'Son dönem SM%'}, ticks:{callback:v=>'%'+v}} },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>{const r=c.raw._r; return `${r.musteri}: ${fmtEur(r.yillikEur)} · SM %${r.son.toFixed(1)}`;}}} } }
+  };
+  if (chScatter){ chScatter.data=cfg.data; chScatter.options=cfg.options; chScatter.update(); }
+  else chScatter = new Chart(document.getElementById('chScatter'), cfg);
+}
+
+function renderPipe(rows){
+  const act = rows.filter(r=>!r.expired && !r.dataError && r.daysToEnd!==null && r.daysToEnd>=0);
+  const b = {'0–3 ay':[0,92],'3–6 ay':[93,183],'6–12 ay':[184,365],'12+ ay':[366,1e9]};
+  const labels = Object.keys(b);
+  const vals = labels.map(k=>act.filter(r=>r.daysToEnd>=b[k][0]&&r.daysToEnd<=b[k][1]).reduce((s,r)=>s+r.yillikEur,0));
+  const cnts = labels.map(k=>act.filter(r=>r.daysToEnd>=b[k][0]&&r.daysToEnd<=b[k][1]).length);
+  const cols = [css('--crit'), css('--warn'), css('--accent'), css('--ok')];
+  const cfg = { type:'bar',
+    data:{ labels, datasets:[{data:vals.map(Math.round), backgroundColor:cols, borderRadius:4}]},
+    options:{ maintainAspectRatio:false, plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>`${fmtEur(c.raw)} · ${cnts[c.dataIndex]} sözleşme`}}},
+      scales:{y:{ticks:{callback:v=>fmtEurK(v)}}} } };
+  if (chPipe){ chPipe.data=cfg.data; chPipe.update(); }
+  else chPipe = new Chart(document.getElementById('chPipe'), cfg);
+}
+
+function renderDist(rows){
+  const bands = [['< %0',-1e9,0],['%0–25',0,25],['%25–60',25,60],['%60–85',60,85],['> %85',85,1e9]];
+  const withSM = rows.filter(r=>r.son!==null);
+  const cnt = bands.map(b=>withSM.filter(r=>r.son>=b[1]&&r.son<b[2]).length);
+  const rev = bands.map(b=>withSM.filter(r=>r.son>=b[1]&&r.son<b[2]).reduce((s,r)=>s+r.yillikEur,0));
+  const cols = [css('--crit'), css('--crit')+'99', css('--warn'), css('--ok')+'99', css('--ok')];
+  const cfg = { data:{ labels: bands.map(b=>b[0]), datasets:[
+      {type:'bar', label:'Sözleşme sayısı', data:cnt, backgroundColor:cols, yAxisID:'y', borderRadius:4},
+      {type:'line', label:'Ciro', data:rev.map(Math.round), yAxisID:'y2', borderColor:css('--accent'), pointRadius:3, tension:.3} ]},
+    options:{ maintainAspectRatio:false,
+      scales:{ y:{title:{display:true,text:'adet'}}, y2:{position:'right', grid:{display:false}, ticks:{callback:v=>fmtEurK(v)}} },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.dataset.type==='bar'?c.raw+' sözleşme':fmtEur(c.raw)+' ciro'}} } } };
+  if (chDist){ chDist.data=cfg.data; chDist.update(); }
+  else chDist = new Chart(document.getElementById('chDist'), cfg);
+}
+
+// ---------- Table ----------
+let sortKey = 'yillikEur', sortDir = -1;
+function badge(r){
+  const map = {'Sağlıklı':'b-ok','İzleme':'b-warn','Kritik':'b-crit','Süresi dolmuş':'b-exp','Veri hatası':'b-err','Veri yok':'b-exp'};
+  return `<span class="badge ${map[r.health]}">${r.health}</span>`;
+}
+function renderTable(rows){
+  const sorted = [...rows].sort((a,b)=>{
+    let va=a[sortKey], vb=b[sortKey];
+    if (va===null||va===undefined) return 1; if (vb===null||vb===undefined) return -1;
+    if (typeof va==='string') return va.localeCompare(vb,'tr')*sortDir;
+    return (va-vb)*sortDir;
+  });
+  document.getElementById('tbody').innerHTML = sorted.map(r=>`<tr>
+    <td>${r.musteri}${r.tl?'<span class="tl-tag">TL→€</span>':''}</td>
+    <td style="font-family:var(--mono);color:var(--muted)">${r.contract}</td>
+    <td class="num">${fmtEur(r.yillikEur)}</td>
+    <td class="num">${r.son===null?'–':'%'+r.son.toFixed(1)}</td>
+    <td class="num">${r.ytd===null?'–':'%'+r.ytd.toFixed(1)}</td>
+    <td class="num" style="color:${r.trend===null?'inherit':(r.trend<-10?css('--crit'):(r.trend>10?css('--ok'):'inherit'))}">${r.trend===null?'–':(r.trend>0?'+':'')+r.trend.toFixed(1)}</td>
+    <td class="num">${r.daysToEnd===null?'–':(r.daysToEnd<0?'geçti':r.daysToEnd)}</td>
+    <td style="font-family:var(--mono)">${fmtDate(r.end)}</td>
+    <td>${badge(r)}</td>
+  </tr>`).join('');
+  document.getElementById('tblNote').textContent = `${sorted.length} kayıt gösteriliyor · Δ Trend = YTD − Son Dönem (negatif: marj bu yıl eriyor)`;
+}
+document.querySelectorAll('#tbl th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.k;
+    if (sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=-1; }
+    renderTable(filtered());
+  });
+});
+
+// ---------- Data quality ----------
+function renderDQ(){
+  const all = enrich();
+  const errs = all.filter(r=>r.dataError);
+  const exp = all.filter(r=>r.expired);
+  const dupCounts = {};
+  all.forEach(r=>dupCounts[r.contract]=(dupCounts[r.contract]||0)+1);
+  const dups = Object.entries(dupCounts).filter(([k,v])=>v>1);
+  const nofy = all.filter(r=>r.fy===null);
+  const items = [
+    {c:css('--err'), t:`<b>${errs.length} kayıtta bitiş &lt; başlangıç:</b> ${errs.map(r=>r.musteri+' ('+fmtDate(r.start)+' → '+fmtDate(r.end)+')').join(', ')} — SAP kaynağında tarih girişi kontrol edilmeli.`},
+    {c:css('--exp'), t:`<b>${exp.length} sözleşmenin süresi dolmuş</b> ama hâlâ listede. Uzama maddesiyle devam edenler (ör. A21–A23) ile gerçekten kapananlar ayrıştırılmalı — PowerBI'da ayrı bir "Uzama ile devam" statüsü önerilir.`},
+    {c:css('--warn'), t:`<b>${dups.length} sözleşme numarası birden fazla satırda:</b> ${dups.map(([k,v])=>k+' ('+v+'×)').join(', ')} — aynı çerçeve sözleşmenin alt kalemleri ise modelde parent/child ilişkisi kurulmalı, SM% değerleri satır bazında tekrar ediyor.`},
+    {c:css('--warn'), t:`<b>1 kayıtta FY SM% metin değer ("x/o"):</b> A68 — ölçüler bu tip değerleri sessizce düşürmemeli, DQ sayfasında raporlamalı.`},
+    {c:css('--accent'), t:`<b>1 sözleşme TL cinsinden:</b> A143 — para birimi ayrı kolonda tutulmalı; toplam bedel kolonunda € simgesiyle yazılmış olması karışıklık riski.`},
+  ];
+  document.getElementById('dqList').innerHTML = items.map(i=>
+    `<div class="dq-item"><span class="dot" style="background:${i.c}"></span><span>${i.t}</span></div>`).join('');
+}
+
+// ---------- wiring ----------
+function renderAll(){
+  const rows = filtered();
+  const fx = fxRate();
+  document.getElementById('fxNote').textContent = `A143: ₺1,2M → ${fmtEurK(1200000/fx)}`;
+  renderKPIs(rows);
+  renderHorizon(rows);
+  renderPareto(rows);
+  renderScatter(rows);
+  renderPipe(rows);
+  renderDist(rows);
+  renderTable(rows);
+}
+
+document.querySelectorAll('.chip[data-min]').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.chip[data-min]').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  state.min = +c.dataset.min;
+  document.getElementById('minVal').value = state.min;
+  renderAll();
+}));
+document.getElementById('minVal').addEventListener('change',e=>{
+  state.min = +e.target.value || 0;
+  document.querySelectorAll('.chip[data-min]').forEach(x=>x.classList.toggle('on', +x.dataset.min===state.min));
+  renderAll();
+});
+document.querySelectorAll('.chip[data-sm]').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.chip[data-sm]').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  state.smMax = +c.dataset.sm;
+  renderAll();
+}));
+document.getElementById('winSel').addEventListener('change',e=>{ state.win=e.target.value; renderAll(); });
+document.getElementById('cbExpired').addEventListener('change',e=>{ state.expired=e.target.checked; renderAll(); });
+document.getElementById('cbErr').addEventListener('change',e=>{ state.err=e.target.checked; renderAll(); });
+document.getElementById('fxRate').addEventListener('change', renderAll);
+document.getElementById('btnReset').addEventListener('click',()=>{
+  state.min=0; state.smMax=999; state.win='all'; state.expired=false; state.err=false;
+  document.getElementById('minVal').value=0;
+  document.getElementById('winSel').value='all';
+  document.getElementById('cbExpired').checked=false;
+  document.getElementById('cbErr').checked=false;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  document.querySelector('.chip[data-min="0"]').classList.add('on');
+  document.querySelector('.chip[data-sm="999"]').classList.add('on');
+  renderAll();
+});
+document.querySelector('.chip[data-min="0"]').classList.add('on');
+document.querySelector('.chip[data-sm="999"]').classList.add('on');
+window.addEventListener('resize', ()=>renderHorizon(filtered()));
+
+renderDQ();
+renderAll();
+</script>
+</body>
+</html>
