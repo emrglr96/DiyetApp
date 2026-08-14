@@ -11,7 +11,6 @@ from __future__ import annotations
 import datetime as _dt
 import os
 import sys
-import time
 
 # app/ dizinini import yoluna ekle (donmuş ve geliştirme modunda çalışır).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +29,7 @@ class Api:
 
     def __init__(self):
         self._window = None
+        self._counter = 0
 
     def bind(self, window):
         self._window = window
@@ -83,11 +83,15 @@ class Api:
 
     # ---- iç yardımcı: HTML'i geçici dosyaya yaz ve yükle ----
     def _show(self, html: str, name: str):
-        out = runtime_dir() / f"{name}.html"
+        # Her yüklemede benzersiz dosya adı: hem önbelleği atlar hem de
+        # file:// URL'sine sorgu takısı (?v=) eklememizi gerektirmez.
+        # (WebView2, file:// adresinde ?v= takısını dosya adının parçası
+        #  sayıp "File not found" verebiliyor.)
+        self._counter += 1
+        out = runtime_dir() / f"{name}_{self._counter}.html"
         with open(out, "w", encoding="utf-8") as f:
             f.write(html)
-        # Önbelleği atlamak için sürüm parametresi ekle.
-        self._window.load_url(file_uri(out) + f"?v={int(time.time()*1000)}")
+        self._window.load_url(file_uri(out))
 
 
 def run_pywebview() -> bool:
